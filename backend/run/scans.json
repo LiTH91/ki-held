@@ -1,0 +1,1135 @@
+{
+  "331f935f-f0cd-4bb8-ae37-6bdd494d7204": {
+    "status": "completed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "Retrieving page content...",
+      "Found 2 potential comments.",
+      "Analyzing comment-1...",
+      "Analyzing comment-2...",
+      "All comments analyzed."
+    ],
+    "result": {
+      "is_hate": false,
+      "explanation": "Scan complete. See logs for details on detected items."
+    }
+  },
+  "322c79c6-458e-4934-b887-86ffc5bc347a": {
+    "status": "completed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "Retrieving page content...",
+      "Found 2 potential comments.",
+      "Analyzing comment-1...",
+      "Analyzing comment-2...",
+      "All comments analyzed."
+    ],
+    "result": {
+      "is_hate": false,
+      "explanation": "Scan complete. See logs for details on detected items."
+    }
+  },
+  "6e93ee28-1ead-4a0a-ad16-219aeb693f63": {
+    "status": "completed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "Retrieving page content...",
+      "Found 2 potential comments.",
+      "Analyzing comment-1...",
+      "Analyzing comment-2...",
+      "All comments analyzed."
+    ],
+    "result": {
+      "is_hate": false,
+      "explanation": "Scan complete. See logs for details on detected items."
+    }
+  },
+  "1ef5715b-a46e-464a-8f48-f3310e471eb3": {
+    "status": "completed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "Retrieving page content...",
+      "Found 2 potential comments.",
+      "Analyzing comment-1...",
+      "Analyzing comment-2...",
+      "All comments analyzed."
+    ],
+    "result": {
+      "is_hate": false,
+      "explanation": "Scan complete. See logs for details on detected items."
+    }
+  },
+  "9080b866-ddd9-4a36-b37b-b5116830448e": {
+    "status": "completed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "Retrieving page content...",
+      "Found 2 potential comments.",
+      "Analyzing comment-1...",
+      "Analyzing comment-2...",
+      "All comments analyzed."
+    ],
+    "result": {
+      "is_hate": false,
+      "explanation": "Scan complete. See logs for details on detected items."
+    }
+  },
+  "a4d28d33-1318-43cf-b33d-3d254057da1e": {
+    "status": "completed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "Retrieving page content...",
+      "Found 2 potential comments.",
+      "Analyzing comment-1...",
+      "Analyzing comment-2...",
+      "All comments analyzed."
+    ],
+    "result": {
+      "is_hate": false,
+      "explanation": "Scan complete. See logs for details on detected items."
+    }
+  },
+  "7f0d3044-5a34-4698-8281-50aaaf0ef425": {
+    "status": "completed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "Retrieving page content...",
+      "Found 2 potential comments.",
+      "Analyzing comment-1...",
+      "Analyzing comment-2...",
+      "All comments analyzed."
+    ],
+    "result": {
+      "is_hate": false,
+      "explanation": "Scan complete. See logs for details on detected items."
+    }
+  },
+  "b17c0025-64c2-4225-8b82-8e44a49b2feb": {
+    "status": "failed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "An error occurred: 'function' object has no attribute 'info'"
+    ]
+  },
+  "b66ff8d8-333d-4dc2-96f4-8ba3f3b7d23d": {
+    "status": "failed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "An error occurred: 'function' object has no attribute 'info'"
+    ]
+  },
+  "4f21b395-3761-4d0b-8478-cebca00ecc1d": {
+    "status": "failed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "An error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "658f20e9-00bf-4905-9918-5afbe24e3849": {
+    "status": "failed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "An error occurred: Client failed to connect: Server session was closed unexpectedly"
+    ]
+  },
+  "5fb810fc-fd68-4af7-b676-f008b7b037f8": {
+    "status": "failed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "An error occurred: Client failed to connect: Server session was closed unexpectedly"
+    ]
+  },
+  "21db3251-2832-435f-a5ad-a7d228dde635": {
+    "status": "failed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://example.com...",
+      "An error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "865979b2-9aef-4f8c-bb5d-0d52bd59239e": {
+    "status": "failed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://example.com...",
+      "An error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "b1d8be45-491e-4b74-9948-3e0351b6fe9b": {
+    "status": "failed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://example.com...",
+      "An error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "227335e7-c062-468b-a9d4-9194e2f0c7b3": {
+    "status": "failed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://example.com...",
+      "An error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "cf03bd0b-dba0-4020-b665-4f6f024c168f": {
+    "status": "failed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena...",
+      "An error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "ab30557c-b08d-4c20-a703-d16af36bdce5": {
+    "status": "failed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://httpbin.org/html...",
+      "An error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "feecfe40-9d94-463c-90c9-5a09a824a6ef": {
+    "status": "failed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://httpbin.org/html...",
+      "An error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "0310a57d-66f4-49a2-a8f2-d96d3ce18906": {
+    "status": "failed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://httpbin.org/html...",
+      "An error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "a763b50b-62a3-439a-9926-d965398e8acf": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "837e311e-3732-4b13-9a2f-fd258b1d14ed": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "7e28da9f-274b-46a9-a6ea-adeb2cb83128": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly"
+    ]
+  },
+  "2020f125-e82a-4c68-8ee2-924ab47ae8a6": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "23275302-737e-46e6-ae43-06ffe8ad59d5": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly"
+    ]
+  },
+  "0b9a177e-7d7a-4572-bfab-201ab12397bf": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "0ce03e49-83f1-43c9-b444-23cc0141085e": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "a91b07ba-424c-41bd-b42d-445017117e8a": {
+    "status": "failed",
+    "message": "An unexpected error occurred: human_wait() missing 1 required positional argument: 'action_name'",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena...",
+      "An unexpected error occurred: human_wait() missing 1 required positional argument: 'action_name'"
+    ]
+  },
+  "2f3e84a7-4b47-45aa-bb7c-0e0bc7eb3a45": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "ad95baee-13db-4202-ac71-bd6e0e05d4a2": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Unknown tool: get_dom",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena...",
+      "Getting DOM content...",
+      "An unexpected error occurred: Unknown tool: get_dom"
+    ]
+  },
+  "9e956081-629e-4fb2-8806-5d0e22025eb5": {
+    "status": "failed",
+    "message": "An unexpected error occurred: object of type 'CallToolResult' has no len()",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena...",
+      "Getting DOM content...",
+      "An unexpected error occurred: object of type 'CallToolResult' has no len()"
+    ]
+  },
+  "b0a0a0ee-745d-49c8-a3ba-db49b52a9a24": {
+    "status": "failed",
+    "message": "An unexpected error occurred: 'CallToolResult' object has no attribute 'get'",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena...",
+      "Getting DOM content...",
+      "An unexpected error occurred: 'CallToolResult' object has no attribute 'get'"
+    ]
+  },
+  "a554ba29-4390-41c0-b092-2c1b5ac0e062": {
+    "status": "failed",
+    "message": "An unexpected error occurred: 'CallToolResult' object has no attribute 'get'",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena...",
+      "Getting DOM content...",
+      "An unexpected error occurred: 'CallToolResult' object has no attribute 'get'"
+    ]
+  },
+  "97d3caba-e0bf-4928-86a2-ad96d74883db": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "5fc599ac-a508-454b-a2bd-ce57f6828423": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "931bd890-df5a-4007-a80f-40e93800f692": {
+    "status": "completed",
+    "message": "Scan completed. No hate speech detected.",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena...",
+      "Getting DOM content...",
+      "Received DOM content (length: 123).",
+      "Analyzing content for hate speech...",
+      "Scan completed. No hate speech detected."
+    ],
+    "result": {
+      "is_hate": false,
+      "confidence": null,
+      "categories": [],
+      "explanation": "No hate speech found in comments."
+    }
+  },
+  "ac12ceb2-429e-4183-871f-a633a10ccd82": {
+    "status": "completed",
+    "message": "Scan completed. No hate speech detected.",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena...",
+      "Checking for cookie consent banner...",
+      "Clicked cookie consent button.",
+      "Getting DOM content...",
+      "Received DOM content (length: 123).",
+      "Analyzing content for hate speech...",
+      "Scan completed. No hate speech detected."
+    ],
+    "result": {
+      "is_hate": false,
+      "confidence": null,
+      "categories": [],
+      "explanation": "No hate speech found in comments."
+    }
+  },
+  "ac23dbed-86b8-4675-b730-986e665dcdbd": {
+    "status": "completed",
+    "message": "Scan completed. No hate speech detected.",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid02B1joY3KHuGYBzZhKoNDr8Sh15iceUZmw9gziNq8SDzoyx7nXu9WR5oLtX4kSL6Vul...",
+      "Checking for cookie consent banner...",
+      "Clicked cookie consent button.",
+      "Getting DOM content...",
+      "Received DOM content (length: 123).",
+      "Analyzing content for hate speech...",
+      "Scan completed. No hate speech detected."
+    ],
+    "result": {
+      "is_hate": false,
+      "confidence": null,
+      "categories": [],
+      "explanation": "No hate speech found in comments."
+    }
+  },
+  "f1ae64aa-282a-4dd9-9ca0-3b4cacb2091f": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Unknown tool: scroll",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid02B1joY3KHuGYBzZhKoNDr8Sh15iceUZmw9gziNq8SDzoyx7nXu9WR5oLtX4kSL6Vul...",
+      "Checking for cookie consent banner...",
+      "Clicked cookie consent button.",
+      "Looking for 'Show all comments' buttons...",
+      "Clicked 'Show all comments' buttons.",
+      "Scrolling down 3 times to load all comments...",
+      "An unexpected error occurred: Unknown tool: scroll"
+    ]
+  },
+  "66fa4c47-68db-4e16-8bd5-498d396a7486": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Unknown tool: scroll",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid02B1joY3KHuGYBzZhKoNDr8Sh15iceUZmw9gziNq8SDzoyx7nXu9WR5oLtX4kSL6Vul...",
+      "Checking for cookie consent banner...",
+      "Clicked cookie consent button.",
+      "Looking for 'Show all comments' buttons...",
+      "Clicked 'Show all comments' buttons.",
+      "Scrolling down 3 times to load all comments...",
+      "An unexpected error occurred: Unknown tool: scroll"
+    ]
+  },
+  "29983801-fa0d-4ca2-97f1-093eff252021": {
+    "status": "failed",
+    "message": "An unexpected error occurred: scroll_page() got an unexpected keyword argument 'pixels'",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "Checking for cookie consent banner...",
+      "No cookie consent button found, continuing.",
+      "Looking for 'Show all comments' buttons...",
+      "No 'Show all comments' button found.",
+      "Scrolling down 3 times to load all comments...",
+      "An unexpected error occurred: scroll_page() got an unexpected keyword argument 'pixels'"
+    ]
+  },
+  "48e03fc1-34cb-4633-a656-223e514126b2": {
+    "status": "failed",
+    "message": "An unexpected error occurred: scroll_page() got an unexpected keyword argument 'pixels'",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "Checking for cookie consent banner...",
+      "No cookie consent button found, continuing.",
+      "Looking for 'Show all comments' buttons...",
+      "No 'Show all comments' button found.",
+      "Scrolling down 3 times to load all comments...",
+      "An unexpected error occurred: scroll_page() got an unexpected keyword argument 'pixels'"
+    ]
+  },
+  "697c9633-d94c-476f-82fc-ec5d23a5ebaf": {
+    "status": "completed",
+    "message": "Scan completed. No hate speech detected.",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "Checking for cookie consent banner...",
+      "No cookie consent button found, continuing.",
+      "Looking for 'Show all comments' buttons...",
+      "No 'Show all comments' button found.",
+      "Scrolling down 3 times to load all comments...",
+      "Scroll 1/3 complete.",
+      "Scroll 2/3 complete.",
+      "Scroll 3/3 complete.",
+      "Getting DOM content...",
+      "Received DOM content (length: 123).",
+      "Analyzing content for hate speech...",
+      "Scan completed. No hate speech detected."
+    ],
+    "result": {
+      "is_hate": false,
+      "confidence": null,
+      "categories": [],
+      "explanation": "No hate speech found in comments."
+    }
+  },
+  "03ad0602-5e0b-44f2-ac3e-79acabb46a22": {
+    "status": "completed",
+    "message": "Scan completed. No hate speech detected.",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "Checking for cookie consent banner...",
+      "No cookie consent button found, continuing.",
+      "Looking for 'Show all comments' buttons...",
+      "No 'Show all comments' button found.",
+      "Scrolling down 3 times to load all comments...",
+      "Scroll 1/3 complete.",
+      "Scroll 2/3 complete.",
+      "Scroll 3/3 complete.",
+      "Getting DOM content...",
+      "Received DOM content (length: 123).",
+      "Analyzing content for hate speech...",
+      "Scan completed. No hate speech detected."
+    ],
+    "result": {
+      "is_hate": false,
+      "confidence": null,
+      "categories": [],
+      "explanation": "No hate speech found in comments."
+    }
+  },
+  "bb883115-dad3-4ca4-862e-33cd748e5e37": {
+    "status": "completed",
+    "message": "Scan completed. No hate speech detected.",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "Checking for cookie consent banner...",
+      "No cookie consent button found, continuing.",
+      "Looking for 'Show all comments' buttons...",
+      "No 'Show all comments' button found.",
+      "Scrolling down 3 times to load all comments...",
+      "Scroll 1/3 complete.",
+      "Scroll 2/3 complete.",
+      "Scroll 3/3 complete.",
+      "Getting DOM content...",
+      "Received DOM content (length: 123).",
+      "Analyzing content for hate speech...",
+      "Scan completed. No hate speech detected."
+    ],
+    "result": {
+      "is_hate": false,
+      "confidence": null,
+      "categories": [],
+      "explanation": "No hate speech found in comments."
+    }
+  },
+  "aa69d0da-29cd-4772-a8c0-cef5b35367e5": {
+    "status": "completed",
+    "message": "Scan completed. No hate speech detected.",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "--- Interaction Cycle 1/5 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 2/5 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 3/5 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 4/5 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 5/5 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction cycles complete ---",
+      "Getting DOM content...",
+      "Received DOM content (length: 123).",
+      "Analyzing content for hate speech...",
+      "Scan completed. No hate speech detected."
+    ],
+    "result": {
+      "is_hate": false,
+      "confidence": null,
+      "categories": [],
+      "explanation": "No hate speech found in comments."
+    }
+  },
+  "f7ca4386-f9b6-4f08-8b9e-29659249bfc0": {
+    "status": "completed",
+    "message": "Scan completed. No hate speech detected.",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid022H1BKfM2GP19KVjX2aX9Zia1BtGyxqzTnLgc5ZRcrHrkvd57XrFtdDpcP3jiiPnrl...",
+      "--- Interaction Cycle 1/5 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 2/5 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 3/5 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 4/5 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 5/5 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction cycles complete ---",
+      "Getting DOM content...",
+      "Received DOM content (length: 123).",
+      "Analyzing content for hate speech...",
+      "Scan completed. No hate speech detected."
+    ],
+    "result": {
+      "is_hate": false,
+      "confidence": null,
+      "categories": [],
+      "explanation": "No hate speech found in comments."
+    }
+  },
+  "30bb453d-c600-48a8-bc7a-2a1ab5bd7f6a": {
+    "status": "completed",
+    "message": "Scan completed. No hate speech detected.",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid022H1BKfM2GP19KVjX2aX9Zia1BtGyxqzTnLgc5ZRcrHrkvd57XrFtdDpcP3jiiPnrl...",
+      "--- Interaction Cycle 1/5 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 2/5 ---",
+      "Action: Clicked the comment sorting dropdown.",
+      "--- Interaction Cycle 3/5 ---",
+      "Action: Clicked the comment sorting dropdown.",
+      "--- Interaction Cycle 4/5 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 5/5 ---",
+      "Action: Clicked a 'load more/show replies' button.",
+      "--- Interaction cycles complete ---",
+      "Getting DOM content...",
+      "Received DOM content (length: 123).",
+      "Analyzing content for hate speech...",
+      "Scan completed. No hate speech detected."
+    ],
+    "result": {
+      "is_hate": false,
+      "confidence": null,
+      "categories": [],
+      "explanation": "No hate speech found in comments."
+    }
+  },
+  "18ffe202-4e3e-4677-bde5-f499bbaf8c8e": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "deb77fb6-52b8-4f09-8372-99b4467649b2": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly"
+    ]
+  },
+  "3efde773-d5aa-47dd-a4f1-193f6c09f5f8": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "93e037ef-41dc-4252-8f96-b8b128dc3c9c": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "5ba5dbce-a6c9-4d30-b455-617c9482a59c": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "e23e7b8c-965c-473f-8a31-e3b910237f9d": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "df0fa997-2bdf-4578-82e5-028d6ac9ff7f": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "e4ea4b0b-1418-48d3-a5b9-430d48efcb08": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "659f7639-76a2-430c-8cc4-c374bf3cc763": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "e83e9114-0f32-4022-94e2-59eeb0a90530": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "b0e7d914-de4b-499c-8fde-9cfc77de9987": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "bb7935a0-0da9-4860-97e8-3fd979c861f4": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "1a4d2bc5-22fd-4b7d-bb6d-7acbb5161272": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "3c1319d2-5f56-46ef-8291-520692b6030f": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "b3e2ef30-7651-46d3-91f1-3027ffa35c10": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "e2b02044-d3da-449f-9d40-156c35a26512": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "b84f1fa1-abe3-487a-ac16-f0af67e1e505": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "c4251e0b-07a7-494f-8eed-13792a438d04": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "bf6a909d-f343-4a78-add6-7520b73c1f82": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "855d67ac-23c5-433a-a672-0d42edd5ea8f": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "bfede91e-aec6-49a6-85fe-630fb0f5fa63": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "8c1f4204-d8e3-4981-9ba3-0567763df5df": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly"
+    ]
+  },
+  "eae7f0d5-6533-4a62-bd8b-33a6a6d705e6": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly"
+    ]
+  },
+  "fc9fef7d-bf32-43bb-a6d9-c4500fe1ca99": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly"
+    ]
+  },
+  "2aa114cc-3023-4686-9c35-cc016d30105e": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly"
+    ]
+  },
+  "cdd0dff6-4db5-4f0a-9d1b-00f347e03c82": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Server session was closed unexpectedly"
+    ]
+  },
+  "4482347f-0a77-4094-997b-1ad05d704e72": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "3503f548-33b2-40e9-8d99-4df9691c8a67": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "4f8730a3-efc3-43e9-b0bd-443daf596d0c": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "38a8aab2-3a72-4124-a7e0-0f70f00ed2ba": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "56cff7e1-a5ce-4f5f-8bd0-f79ca713b7b7": {
+    "status": "failed",
+    "message": "An unexpected error occurred: name 'sys' is not defined",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: name 'sys' is not defined"
+    ]
+  },
+  "684c4609-caf7-4b5c-9cc9-dee5754b80e6": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "8d4d832e-2b23-405a-ab31-84232ccfc90d": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "8cf5f49c-d311-4133-b2b1-9d4809e72628": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "567102e9-835c-47bb-af11-e15b51ba9e3f": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "fe07e208-1066-4ba9-b4cd-8b5aa18be47b": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "fbe4d664-95ff-44fc-92f7-5b61e48c2649": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "f1f6eb9c-17b3-4172-be59-35a0c950d790": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "2c3a624e-ca3f-4219-8951-2ef92808daed": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "33347799-14eb-423e-a637-398330f3892d": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "3d9cfcf8-cf6a-4c15-ab3c-a34bb6c68a79": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "b25155de-f6fb-4f4f-948d-4b1c5c26b71c": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "28ed734d-7d36-4820-93b1-4e10cc5bbe0b": {
+    "status": "in_progress",
+    "messages": [
+      "Scan initialized..."
+    ]
+  },
+  "7ffcddb4-20c6-40a8-8fd9-aefa6d54c768": {
+    "status": "in_progress",
+    "messages": [
+      "Scan initialized..."
+    ]
+  },
+  "b714c0fa-8d59-4b5b-80e6-b55de591080d": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Could not launch or navigate in Chrome for the scan.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "An unexpected error occurred: Could not launch or navigate in Chrome for the scan."
+    ]
+  },
+  "a060f6a0-4a9a-4ac4-9953-b188da55b055": {
+    "status": "failed",
+    "message": "An unexpected error occurred: MCP server exited before initialization",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: MCP server exited before initialization"
+    ]
+  },
+  "fd35ed1b-f494-476b-abeb-77eb2f043fe9": {
+    "status": "cleaning up",
+    "message": "Scan finished, cleaning up resources."
+  },
+  "dce61bc5-b18c-4541-8821-37c9f2e30ce2": {
+    "status": "cleaning up",
+    "message": "Scan finished, cleaning up resources."
+  },
+  "93e1a2de-2c4a-4994-a632-ce6018730729": {
+    "status": "in_progress",
+    "messages": [
+      "Scan initialized..."
+    ]
+  },
+  "01a48ed3-d096-4cf5-b05a-ddbcfa1f696b": {
+    "status": "cleaning up",
+    "message": "Scan finished, cleaning up resources."
+  },
+  "f1a21aad-64da-4996-83c6-369bee7ba89f": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "ba418c6d-9a91-4fee-8451-3c135e767211": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "a1a90696-0023-428c-b7dc-91d4eb9cd162": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Connection closed",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Connection closed"
+    ]
+  },
+  "505a38ea-5428-4f5e-81b1-b9fcb9a72b0a": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Client failed to connect: Session terminated",
+    "messages": [
+      "Scan initialized...",
+      "An unexpected error occurred: Client failed to connect: Session terminated"
+    ]
+  },
+  "1ce28e2c-3d30-4f13-a81a-31a879760ef5": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Received empty or very small DOM content. Likely failed to extract.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0Vw5nruS1RuNoNNq56yhLAuYBGqi8sT6KYWoqX38QDMkRsXVw8ydU3q6icW36QLYFl...",
+      "--- Interaction Cycle 1/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 2/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 3/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 4/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 5/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 6/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 7/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 8/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction cycles complete ---",
+      "Getting DOM content...",
+      "An unexpected error occurred: Received empty or very small DOM content. Likely failed to extract."
+    ]
+  }
+}

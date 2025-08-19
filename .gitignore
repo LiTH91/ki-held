@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+backend/.venv/
+backend/venv/
+Windows-MCP/.venv/
+Windows-MCP/venv/
+
+# Coverage & logs
+.coverage
+backend/logs/
+*-startup.log
+Windows-MCP/startup_debug.log
+evidence/temp/
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/tauri-app/node_modules/
+
+# Tauri / Rust build artifacts
+frontend/src-tauri/target/
+frontend/tauri-app/src-tauri/target/
+
+# Large binaries under target
+frontend/src-tauri/target/**/*.pdb
+frontend/src-tauri/target/**/*.exe
+frontend/src-tauri/target/**/*.rlib
+frontend/src-tauri/target/**/*.rmeta
+
+# Executable installers and binaries
+*.exe
+rustup-init.exe
+vs_buildtools.exe
+
+# Environment files with sensitive data
+.env
+backend/.env
+
+# Editor/IDE
+.vscode/
+.idea/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+

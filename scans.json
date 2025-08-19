@@ -1,0 +1,20 @@
+{
+  "baa02737-2891-4875-a149-4590b55b4375": {
+    "status": "completed",
+    "message": "Scan initiated...",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/sebastianbohrnmena/posts/pfbid021yCf4A3ZG4MHFWYz5Aa4WgNmXHZ85fhjHfAE7Hv3uvPJpGNPEbPmwUk8EoQivTbHl...",
+      "Retrieving page content...",
+      "Found 2 potential comments.",
+      "Analyzing comment-1...",
+      "Analyzing comment-2...",
+      "All comments analyzed."
+    ],
+    "result": {
+      "is_hate": false,
+      "explanation": "Scan complete. See logs for details on detected items."
+    }
+  }
+}

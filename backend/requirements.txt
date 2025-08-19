@@ -1,0 +1,19 @@
+fastapi>=0.109.0
+uvicorn>=0.27.0
+watchfiles
+python-dotenv>=1.0.0
+pydantic>=2.6.1
+pydantic-settings>=2.1.0
+pytest>=7.4.4
+pytest-asyncio>=0.23.3
+httpx>=0.26.0
+python-multipart>=0.0.6
+loguru>=0.7.2
+torch>=2.1.0
+transformers>=4.36.0
+sentencepiece>=0.1.99  # Required for RoBERTa tokenizer
+reportlab>=4.0.8  # Required for PDF generation
+Pillow>=10.2.0  # Required for image handling
+pytest-cov>=4.1.0  # For test coverage reporting
+fastmcp>=0.1.0  # Add fastmcp dependency
+filelock
