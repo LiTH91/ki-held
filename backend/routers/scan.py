@@ -128,55 +128,58 @@ async def run_scan_mcp(scan_id: str, url: str):
         messages.append(f"Navigating to {url}...")
         update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
         await human_wait("navigate")
-        await mcp_service.navigate(url)
- 
-        # --- Start of Intelligent Perception-Action Loop ---
-        interaction_cycles = 8
-        for i in range(interaction_cycles):
-            messages.append(f"--- Interaction Cycle {i+1}/{interaction_cycles} ---")
+        nav_result = await mcp_service.navigate(url)
+        
+        # Check if Facebook workflow was used - if so, skip old scanning cycles
+        if nav_result.get("facebook_workflow_used", False):
+            messages.append("✅ Facebook workflow completed - all interactions handled automatically.")
+            messages.append("⏭️ Skipping additional scanning cycles (no scrolling needed).")
             update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
-
-            # 1. LOOK: Get the current state of the screen
-            await human_wait(f"cycle {i+1} - looking at screen")
-
-            # 2. DECIDE & ACT: Prioritize actions
-            # First, look for cookie banners
-            cookie_buttons = ["Accept all", "Allow all", "Decline", "Reject all"]
-            if await mcp_service.find_and_click_button(cookie_buttons):
-                messages.append("Action: Clicked a cookie button.")
+        else:
+            # --- Start of Intelligent Perception-Action Loop ---
+            messages.append("🔄 Starting traditional scanning cycles for non-Facebook content...")
+            interaction_cycles = 8
+            sorting_done = False
+            for i in range(interaction_cycles):
+                messages.append(f"--- Interaction Cycle {i+1}/{interaction_cycles} ---")
                 update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
-                continue # Restart the loop to get a fresh state
 
-            # Then, look for the "Most Relevant" dropdown to change comment sorting
-            sort_buttons = ["Relevanteste", "Most Relevant", "Top comments", "Neueste"]
-            if await mcp_service.find_and_click_button(sort_buttons):
-                messages.append("Action: Clicked the comment sorting dropdown.")
-                update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
-                await human_wait("after clicking sort")
-                # Now, look for the "All comments" option
-                all_comments_options = ["Alle Kommentare", "All comments", "Alle", "All"]
-                if await mcp_service.find_and_click_button(all_comments_options):
-                    messages.append("Action: Selected 'All comments'.")
+                # 1. LOOK: Get the current state of the screen
+                await human_wait(f"cycle {i+1} - looking at screen")
+
+                # 2. DECIDE & ACT: Prioritize actions
+                # First, look for cookie banners
+                cookie_buttons = ["Accept all", "Allow all", "Decline", "Reject all"]
+                if await mcp_service.find_and_click_button(cookie_buttons):
+                    messages.append("Action: Clicked a cookie button.")
                     update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
-                continue
+                    continue # Restart the loop to get a fresh state
 
-            # If no sorting needed, look for comment-expanding buttons
-            comment_buttons = [
-                "Antworten", "Antwort anzeigen", "weitere Kommentare", "Weitere Antworten",
-                "replies", "show replies", "more comments", "view more comments"
-            ]
-            if await mcp_service.find_and_click_button(comment_buttons):
-                messages.append("Action: Clicked a 'load more/show replies' button.")
+                # Facebook sorting is now handled automatically in navigate() function
+                # Skip manual sorting logic as it's integrated into navigation
+                if not sorting_done:
+                    messages.append("Action: Facebook sorting handled automatically during navigation.")
+                    update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
+                    sorting_done = True
+                    continue
+
+                # If no sorting needed, look for comment-expanding buttons
+                comment_buttons = [
+                    "Antworten", "Antwort anzeigen", "weitere Kommentare", "Weitere Antworten",
+                    "replies", "show replies", "more comments", "view more comments"
+                ]
+                if await mcp_service.find_and_click_button(comment_buttons):
+                    messages.append("Action: Clicked a 'load more/show replies' button.")
+                    update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
+                    continue # Restart the loop to get a fresh state
+                
+                # If no buttons to click, scroll down to find more content
+                messages.append("Action: No interactive buttons found. Scrolling down.")
+                await mcp_service.scroll_page()
                 update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
-                continue # Restart the loop to get a fresh state
-            
-            # If no buttons to click, scroll down to find more content
-            messages.append("Action: No interactive buttons found. Scrolling down.")
-            await mcp_service.scroll_page()
-            update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
 
-        messages.append("--- Interaction cycles complete ---")
-        update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
+            messages.append("--- Interaction cycles complete ---")
+            update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
         # --- End of Intelligent Loop ---
         
         # Step 2: Get DOM content from the active browser tab

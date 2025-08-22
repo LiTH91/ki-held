@@ -6,7 +6,7 @@
   - Start and monitor scans via `/api/scan` endpoints
   - Browser automation targeting Chrome (fallback to Edge in tool)
   - Evidence collection and export
-  - Windows automation tools: State/Launch/Click/Type/Scroll/Get-Browser-DOM
+  - Windows automation tools: State/Launch/Click/Type/Scroll/Get-Browser-DOM/Screenshot
 
 ## App structure
 ```
@@ -34,7 +34,7 @@ ki-held/
 - backend/mcp_service.py: high-level helpers that call MCP tools (navigate/get_dom/scroll/click).
 - backend/logger.py: sets console + file loggers into `backend/logs/app.log`.
 - backend/config.py: pydantic settings and `LOGS_DIR` creation.
-- Windows-MCP/main.py: defines tools; suppresses FastMCP CLI banner compatibly; writes early `startup_debug.log` for diagnostics; guards `SetProcessDPIAware`.
+- Windows-MCP/main.py: defines tools; suppresses FastMCP CLI banner compatibly; writes early `startup_debug.log` for diagnostics; guards `SetProcessDPIAware`. Includes `Screenshot-Tool` returning base64 PNG (full-screen or region) used by OCR and template matching.
 - frontend/src/components/ScanStatus.tsx: scan create + poll logic; uses `/api` routes.
 
 External function calls/definitions (projectwide):
@@ -48,7 +48,11 @@ External function calls/definitions (projectwide):
 - log (backend/logger.py): shared logger
 
 ## Run instructions
-- Backend (project root):
+- One-command start (project root, PowerShell):
+```
+./start-app.ps1
+```
+- Backend only (project root):
 ```
 python run_backend.py
 ```
@@ -61,3 +65,9 @@ npm run tauri dev
 ## MCP transport fix (root cause + resolution)
 - Root cause: `fastmcp.utilities.cli` availability differs between versions; banner output on STDIO broke the handshake and caused "Connection closed".
 - Resolution: define a no-op `log_server_banner` when the module is missing; add early `startup_debug.log` breadcrumbs; ensure `mcp_client.py` launches with the Windows-MCP venv python and correct cwd.
+
+## Recent changes
+- Windows-MCP `Type-Tool` (in `Windows-MCP/main.py`):
+  - Applies the same safe-click guards as `Click-Tool` (clamps to safe rect, avoids desktop/background, forbids top-corner/X regions, skips images/hyperlinks, blocks Close/Schließen buttons).
+  - Uses boolean `clear` parameter (`if clear:`) instead of checking string `'True'`.
+  - Impact: prevents accidental clicks on window close buttons and unintended navigation when focusing inputs before typing.

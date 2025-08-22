@@ -27,26 +27,51 @@ class MCPClient:
         if not mcp_dir.exists():
             raise RuntimeError(f"Windows-MCP directory not found: {mcp_dir}")
 
-        # Pass through PATH so venv Scripts remain discoverable for child imports if needed
-        env = os.environ.copy()
+        # Keep launch config
+        self._mcp_dir = mcp_dir
+        self._python_exe = python_exe
+        self._base_env = os.environ.copy()
+        # Ensure predictable stdio
+        self._base_env.setdefault('PYTHONUTF8', '1')
+        self._base_env.setdefault('PYTHONIOENCODING', 'utf-8')
 
-        transport = StdioTransport(
-            command=str(python_exe),
-            args=['main.py'],
-            env=env,
-            cwd=str(mcp_dir)
-        )
-        # Initialize the FastMCP client with the transport
-        self.client = Client(transport)
+        # Build initial client
+        self.client = self._build_client()
         self._is_connected = False
+
+    def _build_client(self) -> Client:
+        transport = StdioTransport(
+            command=str(self._python_exe),
+            args=['main.py'],
+            env=self._base_env,
+            cwd=str(self._mcp_dir)
+        )
+        return Client(transport)
 
     async def connect(self):
         # Log connection attempt
         print("[MCPClient] connect(): attempting to open MCP transport context...")
-        if not self._is_connected:
+        if self._is_connected:
+            return
+        try:
             await self.client.__aenter__()
             self._is_connected = True
             print("[MCPClient] connect(): transport context opened and connected.")
+            return
+        except Exception as e:
+            print(f"[MCPClient] connect(): initial connect failed: {e}")
+            # One retry with fresh transport after brief backoff
+            await asyncio.sleep(0.6)
+            try:
+                self.client = self._build_client()
+                print("[MCPClient] connect(): retrying connect with fresh transport...")
+                await self.client.__aenter__()
+                self._is_connected = True
+                print("[MCPClient] connect(): transport context opened on retry.")
+                return
+            except Exception as e2:
+                print(f"[MCPClient] connect(): retry failed: {e2}")
+                raise
 
     async def disconnect(self):
         if self._is_connected:

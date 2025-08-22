@@ -17,3 +17,6 @@ Pillow>=10.2.0  # Required for image handling
 pytest-cov>=4.1.0  # For test coverage reporting
 fastmcp>=0.1.0  # Add fastmcp dependency
 filelock
+pytesseract>=0.3.13  # OCR library for screenshot text recognition
+opencv-python>=4.8.0  # Computer vision library for template matching
+numpy>=1.24.0  # Required for OpenCV array operations
