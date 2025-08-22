@@ -2,7 +2,7 @@ print("[DEBUG mcp_service] Starting import of mcp_service.py")
 import asyncio
 import os
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 import re
 from urllib.parse import urlparse
@@ -291,7 +291,7 @@ async def find_button_with_template_matching(button_types: list[str]) -> bool:
                 # Suppress random movement briefly after critical click
                 if template_name in ("alle-kommentare", "alle-xx-kommentare-ansehen"):
                     global movement_suppressed_until
-                    movement_suppressed_until = datetime.utcnow() + timedelta(seconds=1.0)
+                    movement_suppressed_until = datetime.now(timezone.utc) + timedelta(seconds=3.0)
                     log.debug(f"[MOVE_SUPPRESS] Enabled until {movement_suppressed_until}")
                 
                 # Record last focus point
@@ -727,7 +727,7 @@ async def find_numbered_comment_buttons() -> bool:
                 await mcp_client.send_command("Click-Tool", {"loc": [x, y]})
                 # Suppress random movement briefly after critical click
                 global movement_suppressed_until
-                movement_suppressed_until = datetime.utcnow() + timedelta(seconds=1.0)
+                movement_suppressed_until = datetime.now(timezone.utc) + timedelta(seconds=3.0)
                 log.debug(f"[MOVE_SUPPRESS] Enabled until {movement_suppressed_until}")
                 
                 last_focus_point = [x, y]
@@ -786,8 +786,13 @@ async def confirm_alle_kommentare_selected() -> bool:
 async def scroll_page_down(wheel_times: int = 2):
     """Hilfsfunktion zum Scrollen mit menschlichem Verhalten."""
     try:
-        # Zufällige Maus-Bewegung vor dem Scrollen
-        await add_subtle_mouse_movement()
+        # Check movement suppression before any mouse movement
+        global movement_suppressed_until
+        if not (movement_suppressed_until and datetime.now(timezone.utc) < movement_suppressed_until):
+            # Only add subtle movement if not suppressed
+            await add_subtle_mouse_movement()
+        else:
+            log.debug("[MOVE_SUPPRESS] Skipping pre-scroll mouse movement (suppressed)")
         
         await mcp_client.send_command("Scroll-Tool", {"direction": "down", "wheel_times": wheel_times})
         log.debug(f"📜 Scrolled down by {wheel_times} wheel times")
@@ -805,7 +810,7 @@ async def add_human_mouse_movement():
     """Simuliert zufällige menschliche Mausbewegungen."""
     try:
         global movement_suppressed_until
-        if movement_suppressed_until and datetime.utcnow() < movement_suppressed_until:
+        if movement_suppressed_until and datetime.now(timezone.utc) < movement_suppressed_until:
             log.debug("[MOVE_SUPPRESS] Skipping human mouse movement (suppressed)")
             return
         # Gelegentliche zufällige Bewegungen
@@ -826,7 +831,7 @@ async def add_subtle_mouse_movement():
     """Subtile Mausbewegung vor Aktionen."""
     try:
         global movement_suppressed_until
-        if movement_suppressed_until and datetime.utcnow() < movement_suppressed_until:
+        if movement_suppressed_until and datetime.now(timezone.utc) < movement_suppressed_until:
             log.debug("[MOVE_SUPPRESS] Skipping subtle mouse movement (suppressed)")
             return
         if random.random() < 0.4:  # 40% Chance für subtile Bewegung
@@ -979,7 +984,7 @@ async def navigate(url: str) -> dict:
         # Kleine Hesitation vor URL-Eingabe
         await add_click_hesitation()
         
-                await mcp_client.send_command("Shortcut-Tool", {"shortcut": ["ctrl", "l"]})
+        await mcp_client.send_command("Shortcut-Tool", {"shortcut": ["ctrl", "l"]})
         
         # Kurze Pause vor dem Tippen (menschlich)
         await asyncio.sleep(random.uniform(0.3, 0.8))

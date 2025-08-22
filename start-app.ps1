@@ -1,9 +1,9 @@
-$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
-
 param(
     [switch]$ForceInstall,
     [switch]$TailLogs
 )
+
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
 # Compute defaults: TailLogs defaults to true if not provided
 $Force = $ForceInstall.IsPresent
