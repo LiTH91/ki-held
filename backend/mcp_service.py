@@ -22,6 +22,8 @@ mcp_client = MCPClient()
 # Remember the last meaningful on-page click to reliably refocus before scrolling
 last_focus_point: list[int] | None = None
 movement_suppressed_until: datetime | None = None
+# Store extracted comments from screenshot analysis
+extracted_comment_data: list[dict] = []
 
 # TODO: Replace with actual Windows-MCP API integration
 
@@ -521,21 +523,17 @@ async def execute_facebook_workflow():
         # Kurzes Lese-Verhalten nach Laden
         await simulate_brief_reading()
         
-        # Schritt 4: Alle "alle xx Kommentare-ansehen" Buttons klicken
-        log.info("4️⃣ Clicking all 'alle xx Kommentare-ansehen' buttons...")
-        load_more_count = await click_all_load_more_comments()
+        # Schritt 4: Neue Strategie - Screenshot + OCR basiertes Kommentar-Scraping mit progressivem Scrollen
+        log.info("4️⃣ Starting progressive screenshot-based comment extraction...")
+        extracted_comments = await extract_comments_via_screenshots()
+        log.info(f"📊 Extracted {len(extracted_comments)} comments via screenshot analysis")
         
-        # Pause zwischen verschiedenen Aktivitätstypen
-        if load_more_count > 0:
-            await human_wait("transition between activities")
-            await simulate_brief_reading()
-        
-        # Schritt 5: Alle "Kommentar ansehen" Buttons klicken
-        log.info("5️⃣ Clicking all 'Kommentar ansehen' buttons...")
-        view_count = await click_all_view_comment_buttons()
+        # Speichere die extrahierten Kommentare für das finale DOM
+        global extracted_comment_data
+        extracted_comment_data = extracted_comments
         
         # Abschließende menschliche Aktivität
-        await simulate_page_completion(load_more_count + view_count)
+        await simulate_page_completion(len(extracted_comments))
         
         log.info("🎉 Facebook workflow completed successfully!")
         return True
@@ -1044,6 +1042,282 @@ async def find_and_click_button(button_texts: list[str]) -> bool:
         log.error(f"Error while trying to find and click button: {e}")
         return False
 
+async def extract_comments_via_screenshots() -> list[dict]:
+    """
+    Hybrid approach: Screenshot + OCR + Template Matching for comment expansion.
+    Progressive scroll strategy: look for expansion buttons, scroll when none found.
+    """
+    extracted_comments = []
+    max_cycles = 15  # Handle longer comment threads
+    cycle_count = 0
+    consecutive_no_buttons = 0
+    seen_content = set()  # Avoid duplicate content
+    
+    log.info("📸 Starting progressive screenshot + template matching comment extraction...")
+    
+    try:
+        # Start from top of comments section
+        await mcp_client.send_command("Scroll-Tool", {"direction": "up", "wheel_times": 5})
+        await asyncio.sleep(1.5)
+        
+        while cycle_count < max_cycles:
+            log.info(f"🔄 Extraction cycle {cycle_count + 1}/{max_cycles}")
+            
+            # SAFETY: Reset cursor to safe position at start of each cycle
+            try:
+                await mcp_client.send_command("Safe-Center-Move-Tool", {})
+                log.debug("🛡️ SAFETY: Reset cursor to safe center position at cycle start")
+            except Exception as e:
+                log.warning(f"⚠️ Could not reset cursor at cycle start: {e}")
+            
+            # Phase 1: Extract visible comments via screenshots + OCR
+            cycle_comments = await extract_visible_comments_ocr(seen_content)
+            extracted_comments.extend(cycle_comments)
+            
+            # Phase 2: Look for and click comment expansion buttons
+            expansion_clicked = await find_and_click_expansion_buttons()
+            
+            if not expansion_clicked:
+                # No expansion buttons found - try scrolling down to find more
+                log.info("📜 No expansion buttons in current view, scrolling down to find more...")
+                await mcp_client.send_command("Scroll-Tool", {"direction": "down", "wheel_times": 3})
+                await asyncio.sleep(random.uniform(1.5, 2.5))
+                
+                # Try once more after scrolling
+                expansion_clicked_after_scroll = await find_and_click_expansion_buttons()
+                
+                if not expansion_clicked_after_scroll:
+                    consecutive_no_buttons += 1
+                    if consecutive_no_buttons >= 2:
+                        log.info("🎯 No expansion buttons found after 2 consecutive scroll attempts - extraction complete")
+                        break
+                    else:
+                        log.info(f"🔄 No buttons found (attempt {consecutive_no_buttons}/2), continuing...")
+                else:
+                    consecutive_no_buttons = 0
+            else:
+                consecutive_no_buttons = 0
+            
+            # Wait for new content to load after expansion
+            if expansion_clicked or cycle_count == 0:
+                await asyncio.sleep(random.uniform(2.0, 3.5))
+                
+                # Move cursor to safe neutral position after content loads
+                await mcp_client.send_command("Safe-Center-Move-Tool", {})
+                log.debug("🛡️ Reset cursor to safe center position")
+            
+            cycle_count += 1
+        
+        log.info(f"📊 Progressive extraction completed: {len(extracted_comments)} total comments across {cycle_count} cycles")
+        return extracted_comments
+        
+    except Exception as e:
+        log.error(f"❌ Progressive extraction failed: {e}")
+        return extracted_comments
+
+async def extract_visible_comments_ocr(seen_content: set) -> list[dict]:
+    """Extract comments visible on current screen using OCR."""
+    cycle_comments = []
+    max_screenshots = 3  # Multiple screenshots per cycle
+    
+    for screenshot_num in range(max_screenshots):
+        log.info(f"📸 Screenshot {screenshot_num + 1}/{max_screenshots} for current view")
+        
+        # Take screenshot
+        screenshot_result = await mcp_client.send_command("Screenshot-Tool", {})
+        
+        # Extract base64 data from Screenshot-Tool response
+        screenshot_data = None
+        if screenshot_result and hasattr(screenshot_result, 'content') and screenshot_result.content:
+            content_text = screenshot_result.content[0].text if screenshot_result.content else ""
+            if "Base64 data: " in content_text:
+                screenshot_data = content_text.split("Base64 data: ")[-1]
+        
+        if not screenshot_data:
+            log.warning("⚠️ Screenshot failed - could not extract base64 data")
+            continue
+        
+        # Extract text using OCR
+        from .ocr_service import ocr_service
+        ocr_result = ocr_service.extract_text_from_base64(screenshot_data)
+        ocr_text = ocr_result.get('text', '') if ocr_result else ''
+        
+        if not ocr_text or len(ocr_text.strip()) < 50:
+            log.warning("⚠️ OCR returned minimal text, skipping")
+            continue
+        
+        # Check for duplicate content
+        content_hash = hash(ocr_text[:200])
+        if content_hash in seen_content:
+            log.debug(f"🔄 Duplicate content detected in screenshot {screenshot_num + 1}")
+            continue
+        seen_content.add(content_hash)
+        
+        # Parse comments from OCR text
+        parsed_comments = parse_comments_from_ocr(ocr_text)
+        if parsed_comments:
+            cycle_comments.extend(parsed_comments)
+            log.info(f"📝 Extracted {len(parsed_comments)} comments from screenshot {screenshot_num + 1}")
+        
+        # Small scroll between screenshots to capture different content
+        if screenshot_num < max_screenshots - 1:
+            await mcp_client.send_command("Scroll-Tool", {"direction": "down", "wheel_times": 2})
+            await asyncio.sleep(0.8)
+    
+    return cycle_comments
+
+async def find_and_click_expansion_buttons() -> bool:
+    """Find and click comment expansion buttons using template matching."""
+    log.info("🔍 Looking for comment expansion buttons...")
+    
+    try:
+        # Look for all types of expansion buttons
+        expansion_templates = ["alle-xx-kommentare-ansehen", "Antwort-ansehen"]
+        buttons_clicked = 0
+        
+        for template_name in expansion_templates:
+            # Take screenshot for template matching
+            screenshot_result = await mcp_client.send_command("Screenshot-Tool", {})
+            
+            # Extract base64 data from Screenshot-Tool response
+            screenshot_data = None
+            if screenshot_result and hasattr(screenshot_result, 'content') and screenshot_result.content:
+                content_text = screenshot_result.content[0].text if screenshot_result.content else ""
+                if "Base64 data: " in content_text:
+                    screenshot_data = content_text.split("Base64 data: ")[-1]
+            
+            if not screenshot_data:
+                log.warning("⚠️ Screenshot failed for template matching")
+                continue
+            
+            # Find template matches
+            from .template_service import template_service
+            matches = template_service.match_template_in_base64(screenshot_data, template_name, threshold=0.6)
+            
+            if matches:
+                log.info(f"🎯 Found {len(matches)} '{template_name}' buttons")
+                
+                # Click each expansion button found
+                for i, match in enumerate(matches[:3]):  # Limit to first 3 to avoid spam
+                    x, y = int(match.center[0]), int(match.center[1])
+                    
+                    # Apply left offset for better clicking
+                    if template_name in ("alle-xx-kommentare-ansehen", "Antwort-ansehen"):
+                        w = int(match.size[0])
+                        left_offset = int(min(max(w * 0.35, 24), 96))
+                        x = x - left_offset
+                        log.info(f"[EXPANSION] Applied left_offset={left_offset}px for '{template_name}' button {i+1}")
+                    
+                    log.info(f"🖱️ Clicking expansion button {i+1} at ({x}, {y})")
+                    
+                    # Move and click
+                    await mcp_client.send_command("Move-Tool", {"to_loc": [x, y]})
+                    await asyncio.sleep(random.uniform(0.1, 0.25))
+                    await mcp_client.send_command("Click-Tool", {"loc": [x, y]})
+                    
+                    buttons_clicked += 1
+                    log.info(f"🖱️ Successfully clicked expansion button {i+1}")
+                    
+                    # CRITICAL: Move cursor away from click area to prevent accidental profile clicks
+                    try:
+                        safe_x = x + random.randint(150, 250)  # Move further right and away from usernames
+                        safe_y = y + random.randint(80, 150)   # Move further down away from click area
+                        await mcp_client.send_command("Move-Tool", {"to_loc": [safe_x, safe_y]})
+                        log.info(f"🛡️ SAFETY: Moved cursor to safe position ({safe_x}, {safe_y}) to avoid accidental clicks")
+                        
+                        # Additional safety: Move to center after each click
+                        await asyncio.sleep(0.5)
+                        await mcp_client.send_command("Safe-Center-Move-Tool", {})
+                        log.info(f"🛡️ SAFETY: Reset cursor to safe center position after expansion click {i+1}")
+                        
+                    except Exception as safety_error:
+                        log.error(f"❌ SAFETY MOVEMENT FAILED: {safety_error}")
+                        # Emergency fallback - try to move cursor to a safe area
+                        try:
+                            await mcp_client.send_command("Move-Tool", {"to_loc": [960, 500]})  # Center screen
+                            log.warning("⚠️ Emergency cursor move to center screen")
+                        except:
+                            log.error("❌ Emergency cursor move also failed!")
+                    
+                    # Human-like pause between clicks (increased for safety)
+                    await asyncio.sleep(random.uniform(2.0, 3.0))
+        
+        if buttons_clicked > 0:
+            log.info(f"✅ Successfully clicked {buttons_clicked} expansion buttons")
+            return True
+        else:
+            log.info("ℹ️ No expansion buttons found in current view")
+            return False
+            
+    except Exception as e:
+        log.error(f"❌ Error finding expansion buttons: {e}")
+        return False
+
+def parse_comments_from_ocr(ocr_text: str) -> list[dict]:
+    """Parse comment data from OCR extracted text."""
+    comments = []
+    
+    try:
+        lines = ocr_text.split('\n')
+        current_comment = {}
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Look for author names (usually short lines before content)
+            if len(line) < 50 and not any(char.isdigit() for char in line) and line.count(' ') <= 3:
+                # Possible author name
+                if current_comment:
+                    if current_comment.get('content'):
+                        comments.append(current_comment)
+                
+                current_comment = {
+                    'author': line,
+                    'content': '',
+                    'timestamp': '',
+                    'reactions': '',
+                    'source': 'screenshot_ocr'
+                }
+            
+            # Look for timestamps
+            elif any(pattern in line.lower() for pattern in ['min', 'std', 'tag', 'woche', 'monat', 'jahr', 'h ', 'm ', 'd ']):
+                if current_comment:
+                    current_comment['timestamp'] = line
+            
+            # Look for reaction indicators
+            elif any(reaction in line.lower() for reaction in ['gefällt', 'like', 'love', 'antworten', 'reply']):
+                if current_comment:
+                    current_comment['reactions'] = line
+            
+            # Everything else is likely comment content
+            else:
+                if current_comment:
+                    if current_comment['content']:
+                        current_comment['content'] += ' ' + line
+                    else:
+                        current_comment['content'] = line
+        
+        # Don't forget the last comment
+        if current_comment and current_comment.get('content'):
+            comments.append(current_comment)
+        
+        # Filter out very short or invalid comments
+        valid_comments = []
+        for comment in comments:
+            if (comment.get('content', '').strip() and 
+                len(comment['content'].strip()) > 10 and
+                comment.get('author', '').strip()):
+                valid_comments.append(comment)
+        
+        log.info(f"📝 Parsed {len(valid_comments)} valid comments from OCR text")
+        return valid_comments
+        
+    except Exception as e:
+        log.error(f"❌ Comment parsing failed: {e}")
+        return []
+
 async def get_dom() -> str:
     """Gets the full page DOM from the browser."""
     await _rate_limited("get_dom")
@@ -1063,6 +1337,36 @@ async def get_dom() -> str:
         call_result = await mcp_client.send_command("Get-Browser-DOM-Tool")
         dom_content = call_result.data if hasattr(call_result, 'data') else ''
     log.info(f"[MCP] Received DOM (length: {len(dom_content or '')}).")
+    
+    # If we have extracted comments from screenshots, include them in the DOM
+    global extracted_comment_data
+    if extracted_comment_data:
+        log.info(f"[DOM] Appending {len(extracted_comment_data)} screenshot-extracted comments to DOM")
+        
+        # Create a structured comments section
+        comments_html = "\n<!-- SCREENSHOT-EXTRACTED COMMENTS -->\n"
+        comments_html += "<div class='screenshot-extracted-comments'>\n"
+        
+        for i, comment in enumerate(extracted_comment_data):
+            comments_html += f"  <div class='comment' data-source='screenshot-ocr' data-index='{i}'>\n"
+            comments_html += f"    <div class='author'>{comment.get('author', 'Unknown')}</div>\n"
+            comments_html += f"    <div class='content'>{comment.get('content', '')}</div>\n"
+            comments_html += f"    <div class='timestamp'>{comment.get('timestamp', '')}</div>\n"
+            comments_html += f"    <div class='reactions'>{comment.get('reactions', '')}</div>\n"
+            comments_html += f"  </div>\n"
+        
+        comments_html += "</div>\n"
+        comments_html += "<!-- END SCREENSHOT-EXTRACTED COMMENTS -->\n"
+        
+        # Append to DOM content
+        if dom_content:
+            dom_content += comments_html
+        else:
+            # If DOM is empty (Facebook blocked), return only our extracted comments
+            dom_content = f"<html><body>{comments_html}</body></html>"
+        
+        log.info(f"[DOM] Enhanced DOM with screenshot comments (new length: {len(dom_content)})")
+    
     return dom_content
 
 async def scroll_page(wheel_times: int = 2):

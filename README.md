@@ -5,6 +5,13 @@ A Windows desktop app to scan social media pages, gather evidence, and fight onl
 - Tauri desktop frontend (React + TypeScript)
 - Windows-MCP automation service (FastMCP over STDIO)
 
+### Latest Updates (2025-08-24)
+- ✅ **Enhanced Facebook Scraping**: Progressive screenshot + OCR + template matching approach bypasses Facebook's anti-bot measures
+- ✅ **Safety Improvements**: Advanced cursor movement safety to prevent accidental profile clicks during comment expansion
+- ✅ **Robust Comment Extraction**: Automatically finds and clicks expansion buttons ("alle XX Kommentare ansehen", "Antwort ansehen") 
+- ✅ **Bug Fixes**: Resolved crash issues with missing screenshot_element function
+- ✅ **Anti-Detection**: Human-like interaction patterns with random delays and natural mouse movements
+
 ### Prerequisites
 - Windows 10/11
 - Python 3.13 (on PATH)

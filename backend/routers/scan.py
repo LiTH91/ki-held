@@ -212,12 +212,8 @@ async def run_scan_mcp(scan_id: str, url: str):
                 
                 # Save evidence for detected hate speech
                 comment_id = str(uuid.uuid4())
-                screenshot_bytes = await mcp_service.screenshot_element(f'xpath=//div[contains(text(), "{text[:20]}")]') # Attempt to screenshot element containing text
-                if screenshot_bytes:
-                    await save_temporary_evidence(scan_id, comment_id, screenshot_bytes, hate_analysis_result)
-                    messages.append(f"Detected hate speech: '{text[:50]}...'. Evidence saved.")
-                else:
-                    messages.append(f"Detected hate speech: '{text[:50]}...'. Screenshot failed.")
+                # Note: Evidence screenshots removed as we now use screenshot-based extraction
+                messages.append(f"Detected hate speech: '{text[:50]}...'. Analysis completed.")
             
         if is_hate_detected:
             final_status = "completed"

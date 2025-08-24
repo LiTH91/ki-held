@@ -31,7 +31,10 @@ ki-held/
 - backend/app.py: creates FastAPI app, sets CORS, mounts routers under `/api`.
 - backend/main.py: uvicorn entry to run the app.
 - backend/mcp_client.py: constructs `Client(StdioTransport(...))` to start `Windows-MCP/main.py` using the Windows-MCP venv python; exposes `send_command` with retries.
-- backend/mcp_service.py: high-level helpers that call MCP tools (navigate/get_dom/scroll/click).
+- backend/mcp_service.py: high-level helpers that call MCP tools (navigate/get_dom/scroll/click); includes new progressive screenshot extraction functions for Facebook comment scraping.
+- backend/ocr_service.py: OCR service using pytesseract for text extraction from screenshots; provides `extract_text_from_base64()` method.
+- backend/template_service.py: Template matching service using OpenCV; provides `match_template_in_base64()` for UI element detection.
+- backend/routers/scan.py: scan endpoint implementation; handles hate speech analysis and evidence collection.
 - backend/logger.py: sets console + file loggers into `backend/logs/app.log`.
 - backend/config.py: pydantic settings and `LOGS_DIR` creation.
 - Windows-MCP/main.py: defines tools; suppresses FastMCP CLI banner compatibly; writes early `startup_debug.log` for diagnostics; guards `SetProcessDPIAware`. Includes `Screenshot-Tool` returning base64 PNG (full-screen or region) used by OCR and template matching.
@@ -66,8 +69,39 @@ npm run tauri dev
 - Root cause: `fastmcp.utilities.cli` availability differs between versions; banner output on STDIO broke the handshake and caused "Connection closed".
 - Resolution: define a no-op `log_server_banner` when the module is missing; add early `startup_debug.log` breadcrumbs; ensure `mcp_client.py` launches with the Windows-MCP venv python and correct cwd.
 
-## Recent changes
-- Windows-MCP `Type-Tool` (in `Windows-MCP/main.py`):
-  - Applies the same safe-click guards as `Click-Tool` (clamps to safe rect, avoids desktop/background, forbids top-corner/X regions, skips images/hyperlinks, blocks Close/Schließen buttons).
-  - Uses boolean `clear` parameter (`if clear:`) instead of checking string `'True'`.
-  - Impact: prevents accidental clicks on window close buttons and unintended navigation when focusing inputs before typing.
+## Recent changes (2025-08-24)
+
+### Enhanced Facebook Comment Extraction
+- **Progressive Screenshot Strategy**: Implemented `extract_comments_via_screenshots()` function using OCR + template matching
+- **Multi-Method Detection**: Combines OCR text extraction with OpenCV template matching for robust button detection
+- **Automatic Expansion**: Finds and clicks "alle XX Kommentare ansehen" and "Antwort ansehen" buttons to expand comment threads
+- **Anti-Bot Bypass**: Uses screenshot-based extraction when Facebook blocks DOM/State-Tool access
+
+### Safety Improvements
+- **Enhanced Cursor Safety**: Added multi-layer safety movements after each expansion button click:
+  - Primary safety movement: 150-250px away from click area
+  - Secondary safety reset: `Safe-Center-Move-Tool` to screen center
+  - Emergency fallback: Manual cursor positioning if safety measures fail
+- **Cycle-Level Resets**: Cursor automatically resets to safe position at start of each extraction cycle
+- **Error Handling**: Robust try-catch blocks around all safety movements with detailed logging
+
+### Technical Implementation
+- **New Functions Added**:
+  - `extract_comments_via_screenshots()`: Main progressive extraction controller
+  - `extract_visible_comments_ocr()`: OCR-based comment text extraction  
+  - `find_and_click_expansion_buttons()`: Template matching for UI button detection
+  - `parse_comments_from_ocr()`: Structured comment data parsing from OCR text
+- **Template Matching**: Uses pre-defined PNG templates for button recognition
+- **OCR Integration**: pytesseract for text extraction from screenshots
+- **Human-like Behavior**: Random delays, natural scroll patterns, hesitation before clicks
+
+### Bug Fixes
+- **Missing Function Error**: Removed broken `screenshot_element()` call that caused scan crashes
+- **Import Errors**: Fixed OCR and template service import issues
+- **Indentation Issues**: Resolved syntax errors preventing backend startup
+
+### Facebook Workflow Updates
+- **State-Tool Fallback**: When State-Tool returns empty (Facebook blocking), automatically switches to OCR/template methods
+- **Progressive Scrolling**: Intelligently scrolls to find more content when no expansion buttons are visible
+- **Comment Integration**: Screenshot-extracted comments are properly integrated into final DOM output
+- **Extraction Limits**: Configurable cycle limits (default: 15) with consecutive scroll attempt limits (2)
