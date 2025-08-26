@@ -5,12 +5,13 @@ A Windows desktop app to scan social media pages, gather evidence, and fight onl
 - Tauri desktop frontend (React + TypeScript)
 - Windows-MCP automation service (FastMCP over STDIO)
 
-### Latest Updates (2025-08-24)
-- ✅ **Enhanced Facebook Scraping**: Progressive screenshot + OCR + template matching approach bypasses Facebook's anti-bot measures
-- ✅ **Safety Improvements**: Advanced cursor movement safety to prevent accidental profile clicks during comment expansion
-- ✅ **Robust Comment Extraction**: Automatically finds and clicks expansion buttons ("alle XX Kommentare ansehen", "Antwort ansehen") 
-- ✅ **Bug Fixes**: Resolved crash issues with missing screenshot_element function
-- ✅ **Anti-Detection**: Human-like interaction patterns with random delays and natural mouse movements
+### Latest Updates (2025-08-26)
+- ✅ **Fatal Abort on URL Change**: If navigation leaves the original Facebook post/modal, the workflow aborts immediately (no move/click/scroll/shortcut).
+- ✅ **Hard-Stop Guard**: A global hard-stop flag blocks any further desktop interactions after a fatal event.
+- ✅ **Modal-Safe Movements**: Cursor movements and clicks are constrained to the modal content area; expansion clicks are clamped using percentage-of-screenshot bounds.
+- ✅ **Alle Kommentare Exemption**: The initial filter selection click is not clamped (prevents misses on varied layouts/zoom).
+- ✅ **Start Script Hardening**: `start-app.ps1` now clears Python caches and kills lingering uvicorn processes before launch.
+- ✅ **Unit Test**: Added test to ensure abort propagation stops extraction without scrolling.
 
 ### Prerequisites
 - Windows 10/11
@@ -29,10 +30,10 @@ cd backend
 pip install -r requirements.txt
 ```
 
-2) Start backend (project root)
+2) Start backend (project root) – recommended script
 ```powershell
 cd ..
-python run_backend.py
+./start-app.ps1
 ```
 
 3) Start desktop app (frontend)

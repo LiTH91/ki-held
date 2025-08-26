@@ -69,7 +69,7 @@ npm run tauri dev
 - Root cause: `fastmcp.utilities.cli` availability differs between versions; banner output on STDIO broke the handshake and caused "Connection closed".
 - Resolution: define a no-op `log_server_banner` when the module is missing; add early `startup_debug.log` breadcrumbs; ensure `mcp_client.py` launches with the Windows-MCP venv python and correct cwd.
 
-## Recent changes (2025-08-24)
+## Recent changes (2025-08-26)
 
 ### Enhanced Facebook Comment Extraction
 - **Progressive Screenshot Strategy**: Implemented `extract_comments_via_screenshots()` function using OCR + template matching
@@ -77,13 +77,11 @@ npm run tauri dev
 - **Automatic Expansion**: Finds and clicks "alle XX Kommentare ansehen" and "Antwort ansehen" buttons to expand comment threads
 - **Anti-Bot Bypass**: Uses screenshot-based extraction when Facebook blocks DOM/State-Tool access
 
-### Safety Improvements
-- **Enhanced Cursor Safety**: Added multi-layer safety movements after each expansion button click:
-  - Primary safety movement: 150-250px away from click area
-  - Secondary safety reset: `Safe-Center-Move-Tool` to screen center
-  - Emergency fallback: Manual cursor positioning if safety measures fail
-- **Cycle-Level Resets**: Cursor automatically resets to safe position at start of each extraction cycle
-- **Error Handling**: Robust try-catch blocks around all safety movements with detailed logging
+### Safety & Abort Improvements
+- **Fatal Abort on URL Change**: If navigation leaves the original post/modal, raise a fatal abort and stop all interactions immediately.
+- **Hard-Stop Guard**: Global `hard_stop_active` blocks Move/Click/Scroll/Type/Shortcut at the rate-limiter layer.
+- **Modal-Safe Cursor**: `move_cursor_to_safe_modal_area()` keeps movement inside the modal; initial "Alle Kommentare" click is not clamped.
+- **Percentage-Based Clamp**: Expansion clicks are clamped to modal bounds computed as percentages of the current screenshot size.
 
 ### Technical Implementation
 - **New Functions Added**:
@@ -91,6 +89,8 @@ npm run tauri dev
   - `extract_visible_comments_ocr()`: OCR-based comment text extraction  
   - `find_and_click_expansion_buttons()`: Template matching for UI button detection
   - `parse_comments_from_ocr()`: Structured comment data parsing from OCR text
+  - `clamp_to_modal(x, y, image_width, image_height)`: Percentage-of-screenshot clamping for expansion clicks
+  - `AbortExtractionError`: Control-flow exception to stop extraction immediately on URL/profile navigation
 - **Template Matching**: Uses pre-defined PNG templates for button recognition
 - **OCR Integration**: pytesseract for text extraction from screenshots
 - **Human-like Behavior**: Random delays, natural scroll patterns, hesitation before clicks
@@ -102,6 +102,9 @@ npm run tauri dev
 
 ### Facebook Workflow Updates
 - **State-Tool Fallback**: When State-Tool returns empty (Facebook blocking), automatically switches to OCR/template methods
-- **Progressive Scrolling**: Intelligently scrolls to find more content when no expansion buttons are visible
+- **Progressive Scrolling**: Intelligently scrolls to find more content when no expansion buttons are visible (disabled by fatal abort)
 - **Comment Integration**: Screenshot-extracted comments are properly integrated into final DOM output
 - **Extraction Limits**: Configurable cycle limits (default: 15) with consecutive scroll attempt limits (2)
+
+### Start Script Hardening
+- `start-app.ps1` clears backend `__pycache__` and `.pyc`, kills lingering uvicorn processes, and prints current git rev before launching services.

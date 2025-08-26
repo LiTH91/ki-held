@@ -63,6 +63,24 @@ Ensure-McpEnv
 
 # --- Process Startup ---
 
+# Extra hardening to avoid stale code and duplicate backends
+Write-Host "Clearing backend __pycache__ and .pyc files..."
+Get-ChildItem -Path $backendPath -Recurse -Include *.pyc -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+Get-ChildItem -Path $backendPath -Recurse -Directory -Filter __pycache__ -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+Write-Host "Killing any uvicorn python processes..."
+Get-CimInstance Win32_Process |
+  Where-Object { $_.Name -eq "python.exe" -and $_.CommandLine -match "uvicorn" } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+
+# Optional: show current commit for traceability
+if (Test-Path (Join-Path $scriptRoot ".git")) {
+  try {
+    $rev = git rev-parse --short HEAD 2>$null
+    if ($LASTEXITCODE -eq 0) { Write-Host "Launching backend at git rev $rev" }
+  } catch {}
+}
+
 # Windows-MCP is started on-demand by the backend via STDIO transport
 Write-Host "Windows-MCP will be launched on-demand by the backend..."
 
