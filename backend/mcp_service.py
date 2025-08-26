@@ -26,6 +26,10 @@ class AbortExtractionError(Exception):
 
 # Global HARD STOP flag to prevent any further desktop interactions after fatal abort
 hard_stop_active: bool = False
+
+# Movement diagnostics
+last_move_point: tuple[int, int] | None = None
+last_move_at: datetime | None = None
 # Remember the last meaningful on-page click to reliably refocus before scrolling
 last_focus_point: list[int] | None = None
 movement_suppressed_until: datetime | None = None
@@ -142,13 +146,20 @@ async def _rate_limited(action_name: str):
     await human_wait(action_name)
 
 def normalize_facebook_text(text: str) -> str:
-    """Normalisiert Facebook-Text für robuste Suche."""
+    """Normalisiert Facebook-Text für robuste Suche.
+    # PATCH: Implement robust normalization (zero-width removal, NBSP handling, lowercase, collapse spaces)
+    """
     if not text:
         return ""
-    # Entferne unsichtbare Unicode-Zeichen (Zero Width No-Break Space etc.)
-    normalized = ''.join(c for c in text if c.isprintable() or c.isspace())
-    # Entferne extra Whitespace und konvertiere zu lowercase
-    return ' '.join(normalized.split()).lower()
+    try:
+        s = text.replace("\xa0", " ")
+        # PATCH: remove zero-width characters via regex
+        s = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", s)
+        s = s.lower().strip()
+        s = " ".join(s.split())
+        return s
+    except Exception:
+        return (text or "").lower().strip()
 
 async def find_button_with_ocr(button_texts: list[str], region: list[int] = None) -> bool:
     """
@@ -529,6 +540,13 @@ async def execute_facebook_workflow(original_url: str = ""):
     5. Alle "Kommentar ansehen" Buttons klicken
     """
     log.info("🚀 Starting comprehensive Facebook workflow with anti-detection...")
+    # Reset HARD STOP at the start of each workflow
+    try:
+        global hard_stop_active
+        hard_stop_active = False
+        log.debug("[HARD_STOP] Reset to False at workflow start")
+    except Exception:
+        pass
     
     try:
         # Schritt 1: Chrome focus sicherstellen mit menschlicher Verzögerung
@@ -862,8 +880,19 @@ async def confirm_alle_kommentare_selected() -> bool:
             log.error("❌ Confirmation: 'Relevanteste' still active after click.")
             return False
 
+        # PATCH: OCR fallback - search screen text for 'alle kommentare' or 'all comments'
+        try:
+            from .ocr_service import ocr_service
+            ocr_res = ocr_service.extract_text_from_base64(base64_data)
+            otext = normalize_facebook_text(ocr_res.get('text', '') if ocr_res else '')
+            if any(k in otext for k in [normalize_facebook_text('alle kommentare'), normalize_facebook_text('all comments')]):
+                log.info("✅ Confirmation via OCR: 'Alle Kommentare' text present.")
+                return True
+        except Exception as _e:
+            log.debug(f"[CONFIRM_OCR] fallback failed: {_e}")
+
         # If neither found, be conservative
-        log.warning("⚠️ Confirmation inconclusive: neither template found.")
+        log.warning("⚠️ Confirmation inconclusive: neither template nor OCR confirmed.")
         return False
     except Exception as e:
         log.error(f"❌ Error during confirmation step: {e}")
@@ -897,27 +926,45 @@ async def move_cursor_to_safe_modal_area(current_x: int, current_y: int):
     """
     log.info("🔧 NEW CODE: Using move_cursor_to_safe_modal_area function!")
     try:
-        # Define safe modal boundaries for Facebook after "Alle Kommentare" step
-        # These boundaries keep cursor in the main content area
-        MODAL_LEFT_BOUNDARY = 300    # Avoid left sidebar
-        MODAL_RIGHT_BOUNDARY = 1200  # Avoid right sidebar  
-        MODAL_TOP_BOUNDARY = 200     # Avoid top browser chrome
-        MODAL_BOTTOM_BOUNDARY = 700  # Avoid bottom taskbar area
-        
-        # Calculate safe position relative to current click
-        # Move to center-right area of the modal, away from click but within bounds
-        safe_x = max(MODAL_LEFT_BOUNDARY + 100, min(current_x + 200, MODAL_RIGHT_BOUNDARY - 100))
-        safe_y = max(MODAL_TOP_BOUNDARY + 50, min(current_y + 100, MODAL_BOTTOM_BOUNDARY - 50))
-        
-        # Add small random offset for human-like behavior, but keep within bounds
-        offset_x = random.randint(-30, 30)
-        offset_y = random.randint(-20, 20)
-        
-        final_x = max(MODAL_LEFT_BOUNDARY, min(safe_x + offset_x, MODAL_RIGHT_BOUNDARY))
-        final_y = max(MODAL_TOP_BOUNDARY, min(safe_y + offset_y, MODAL_BOTTOM_BOUNDARY))
-        
+        # PATCH: Use percentage-based modal bounds derived from current screenshot size for adaptability
+        iw = ih = None
+        try:
+            screenshot_result_sz = await mcp_client.send_command("Screenshot-Tool", {})
+            if screenshot_result_sz and hasattr(screenshot_result_sz, 'content') and screenshot_result_sz.content:
+                content_text_sz = screenshot_result_sz.content[0].text
+                if "Base64 data: " in content_text_sz:
+                    import base64, cv2, numpy as np
+                    b64 = content_text_sz.split("Base64 data: ")[-1]
+                    img_bytes = base64.b64decode(b64)
+                    img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
+                    img = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+                    ih, iw = (img.shape[0], img.shape[1]) if img is not None else (None, None)
+        except Exception:
+            pass
+
+        # Compute modal-safe rectangle
+        if iw and ih and iw > 0 and ih > 0:
+            left = int(iw * 0.20)
+            right = int(iw * 0.80)
+            top = int(ih * 0.15)
+            bottom = int(ih * 0.88)
+        else:
+            left, right, top, bottom = 300, 1200, 200, 700
+
+        # Calculate safe position relative to current click, bias to center-right
+        target_x = max(left + 100, min(current_x + 200, right - 100))
+        target_y = max(top + 50, min(current_y + 100, bottom - 50))
+
+        # Human-like jitter
+        target_x += random.randint(-30, 30)
+        target_y += random.randint(-20, 20)
+
+        # Final clamp inside modal bounds
+        final_x = max(left, min(target_x, right))
+        final_y = max(top, min(target_y, bottom))
+
         log.info(f"🎯 Moving cursor from ({current_x}, {current_y}) to safe modal area ({final_x}, {final_y})")
-        
+
         await mcp_client.send_command("Move-Tool", {"to_loc": [final_x, final_y]})
         
         # Brief pause to let any hover effects settle
@@ -944,9 +991,56 @@ def clamp_to_modal(x: int, y: int, *, image_width: int | None = None, image_heig
         left, right, top, bottom = 300, 1200, 200, 700
     clamped_x = max(left, min(x, right))
     clamped_y = max(top, min(y, bottom))
+    # PATCH: add small human-like jitter then re-clamp to stay inside safe area
+    try:
+        jx = random.randint(-3, 3)
+        jy = random.randint(-3, 3)
+        clamped_x = max(left, min(clamped_x + jx, right))
+        clamped_y = max(top, min(clamped_y + jy, bottom))
+    except Exception:
+        pass
     if clamped_x != x or clamped_y != y:
         log.info(f"[MODAL_CLAMP] Adjusted position from ({x}, {y}) to ({clamped_x}, {clamped_y}) within bounds L{left}-R{right} T{top}-B{bottom}")
     return clamped_x, clamped_y
+
+async def dodge_cursor_then_center(from_x: int, from_y: int):
+    """Quick dodge out of hover popups: move to opposite modal corner, then center-safe."""
+    # PATCH: Use percentage-based bounds when available
+    iw = ih = None
+    try:
+        screenshot_result_sz = await mcp_client.send_command("Screenshot-Tool", {})
+        if screenshot_result_sz and hasattr(screenshot_result_sz, 'content') and screenshot_result_sz.content:
+            content_text_sz = screenshot_result_sz.content[0].text
+            if "Base64 data: " in content_text_sz:
+                import base64, cv2, numpy as np
+                b64 = content_text_sz.split("Base64 data: ")[-1]
+                img_bytes = base64.b64decode(b64)
+                img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
+                img = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+                ih, iw = (img.shape[0], img.shape[1]) if img is not None else (None, None)
+    except Exception:
+        pass
+    if iw and ih and iw > 0 and ih > 0:
+        left = int(iw * 0.20); right = int(iw * 0.80); top = int(ih * 0.15); bottom = int(ih * 0.88)
+    else:
+        left, right, top, bottom = 300, 1200, 200, 700
+    mid_x = (left + right) // 2
+    mid_y = (top + bottom) // 2
+    # Pick opposite corner from current point
+    target_x = right - 60 if from_x < mid_x else left + 60
+    target_y = bottom - 60 if from_y < mid_y else top + 60
+    target_x, target_y = clamp_to_modal(target_x, target_y, image_width=iw, image_height=ih)
+    log.info(f"[DODGE] Moving away from ({from_x}, {from_y}) to ({target_x}, {target_y}) before centering")
+    try:
+        await mcp_client.send_command("Move-Tool", {"to_loc": [target_x, target_y]})
+        await asyncio.sleep(0.25)
+    except Exception as e:
+        log.warning(f"[DODGE] Move failed: {e}")
+    # Then go to safe modal area
+    try:
+        await move_cursor_to_safe_modal_area(target_x, target_y)
+    except Exception as e:
+        log.warning(f"[DODGE] Centering failed: {e}")
 
 # ===== ANTI-DETECTION FUNCTIONS =====
 
@@ -1435,13 +1529,12 @@ async def extract_comments_via_screenshots() -> list[dict]:
                 except Exception as e:
                     log.warning(f"⚠️ Periodic URL validation failed: {e}")
             
-            # SAFETY: Reset cursor to safe position at start of each cycle
+            # SAFETY: Dodge then center at start of each cycle to dismiss any persistent popups
             try:
-                # Use modal-safe positioning instead of screen center to avoid sidebars/taskbar
-                await move_cursor_to_safe_modal_area(600, 400)
-                log.debug("🛡️ SAFETY: Reset cursor to safe modal position at cycle start")
+                await dodge_cursor_then_center(600, 400)
+                log.debug("🛡️ SAFETY: Dodge+Center at cycle start")
             except Exception as e:
-                log.warning(f"⚠️ Could not reset cursor at cycle start: {e}")
+                log.warning(f"⚠️ Could not perform dodge at cycle start: {e}")
             
             # Phase 1: Extract visible comments via screenshots + OCR
             cycle_comments = await extract_visible_comments_ocr(seen_content)
@@ -1716,10 +1809,13 @@ async def find_and_click_expansion_buttons() -> bool:
         expansion_templates = ["alle-xx-kommentare-ansehen", "Antwort-ansehen"]
         buttons_clicked = 0
         
+        # PATCH: Deduping seen boxes (avoid re-clicking same button)
+        seen_boxes: set[tuple[int, int]] = set()
+
         for template_name in expansion_templates:
             # Take screenshot for template matching
             screenshot_result = await mcp_client.send_command("Screenshot-Tool", {})
-            
+        
             # Extract base64 data from Screenshot-Tool response
             screenshot_data = None
             if screenshot_result and hasattr(screenshot_result, 'content') and screenshot_result.content:
@@ -1747,11 +1843,48 @@ async def find_and_click_expansion_buttons() -> bool:
                     x, y = int(match.center[0]), int(match.center[1])
                     w, h = int(match.size[0]), int(match.size[1])
                     confidence = match.confidence if hasattr(match, 'confidence') else 'unknown'
+
+                    # PATCH: dedupe key (bucketize by 8px)
+                    box_key = (x // 8, y // 8)
+                    if box_key in seen_boxes:
+                        log.debug(f"[DEDUP] Skipping already seen button box at ~({x},{y})")
+                        continue
+                    seen_boxes.add(box_key)
                     
                     log.info(f"🔍 DIAGNOSTIC: Template match {i+1} for '{template_name}':")
                     log.info(f"   📍 Raw center: ({x}, {y})")
                     log.info(f"   📐 Size: {w}x{h}")
                     log.info(f"   🎯 Confidence: {confidence}")
+                    
+                    # PATCH: Pre-validate that template match is within modal bounds before processing
+                    # Get current modal bounds
+                    iw = ih = None
+                    try:
+                        screenshot_result_sz = await mcp_client.send_command("Screenshot-Tool", {})
+                        if screenshot_result_sz and hasattr(screenshot_result_sz, 'content') and screenshot_result_sz.content:
+                            content_text_sz = screenshot_result_sz.content[0].text
+                            if "Base64 data: " in content_text_sz:
+                                import base64, cv2, numpy as np
+                                b64 = content_text_sz.split("Base64 data: ")[-1]
+                                img_bytes = base64.b64decode(b64)
+                                img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
+                                img = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+                                ih, iw = (img.shape[0], img.shape[1]) if img is not None else (None, None)
+                    except Exception:
+                        pass
+                    
+                    if iw and ih and iw > 0 and ih > 0:
+                        modal_left = int(iw * 0.20)
+                        modal_right = int(iw * 0.80)
+                        modal_top = int(ih * 0.15)
+                        modal_bottom = int(ih * 0.88)
+                    else:
+                        modal_left, modal_right, modal_top, modal_bottom = 300, 1200, 200, 700
+                    
+                    # Check if template center is outside modal bounds
+                    if not (modal_left <= x <= modal_right and modal_top <= y <= modal_bottom):
+                        log.warning(f"⚠️ SKIPPING: Template match at ({x}, {y}) is outside modal bounds ({modal_left}-{modal_right}, {modal_top}-{modal_bottom})")
+                        continue  # Skip this button entirely
                     
                     # DIAGNOSTIC: Extract and analyze text around the click area
                     try:
@@ -1778,11 +1911,20 @@ async def find_and_click_expansion_buttons() -> bool:
                     
                     # Apply ULTRA-CONSERVATIVE click positioning to avoid usernames
                     original_x, original_y = x, y
-                    if template_name in ("alle-xx-kommentare-ansehen", "Antwort-ansehen"):
-                        # MUCH MORE CONSERVATIVE offset to avoid clicking on usernames
-                        left_offset = int(min(max(w * 0.15, 10), 30))  # Reduced from 0.25, 15, 45
+                    if template_name in ("Antwort-ansehen",):
+                        # Conservative offset to avoid usernames for reply links only
+                        left_offset = int(min(max(w * 0.15, 10), 30))
                         x = x - left_offset
-                        log.info(f"🔧 DIAGNOSTIC: Applied left_offset={left_offset}px, moved from ({original_x}, {original_y}) to ({x}, {y})")
+                        log.info(f"🔧 DIAGNOSTIC: Applied left_offset={left_offset}px (Antwort-ansehen), moved from ({original_x}, {original_y}) to ({x}, {y})")
+                        
+                        # Re-validate after offset - if now outside bounds, skip this button
+                        if not (modal_left <= x <= modal_right and modal_top <= y <= modal_bottom):
+                            log.warning(f"⚠️ SKIPPING: After offset, click position ({x}, {y}) is outside modal bounds")
+                            continue
+                    else:
+                        # For 'alle-xx-kommentare-ansehen' click center of template box
+                        x, y = int(match.center[0]), int(match.center[1])
+                        log.info(f"🔧 DIAGNOSTIC: Using template-centered click for '{template_name}' at ({x}, {y})")
                         
                         # STRICTER boundary check - ensure we don't go too far left
                         if x < 300:  # Increased safety margin from left edge where usernames typically are
@@ -1831,14 +1973,68 @@ async def find_and_click_expansion_buttons() -> bool:
                     await asyncio.sleep(0.2)  # Brief pause
                     
                     # Move to click position and click quickly
-                    x, y = clamp_to_modal(x, y)
+                    # Percentage-based clamp within modal, keep within template box vertically if clamp would push out
+                    # Derive current screenshot size for percent clamp
+                    iw = ih = None
+                    try:
+                        screenshot_result_sz = await mcp_client.send_command("Screenshot-Tool", {})
+                        if screenshot_result_sz and hasattr(screenshot_result_sz, 'content') and screenshot_result_sz.content:
+                            content_text_sz = screenshot_result_sz.content[0].text
+                            if "Base64 data: " in content_text_sz:
+                                import base64, cv2
+                                import numpy as np
+                                b64 = content_text_sz.split("Base64 data: ")[-1]
+                                img_bytes = base64.b64decode(b64)
+                                img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
+                                img = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+                                ih, iw = (img.shape[0], img.shape[1]) if img is not None else (None, None)
+                    except Exception:
+                        pass
+                    cx, cy = clamp_to_modal(x, y, image_width=iw, image_height=ih)
+                    log.debug(f"[CLAMP_LOG] pre=({x},{y}) size=({iw}x{ih}) clamped=({cx},{cy})")
+                    # Keep Y within template box if clamped outside vertically
+                    top_t = original_y - int(h / 2)
+                    bot_t = original_y + int(h / 2)
+                    if cy < top_t or cy > bot_t:
+                        cy = original_y
+                        log.info(f"[TEMPLATE_BOX] Adjusted Y from {y} to template center {cy}")
+                    x, y = cx, cy
                     await mcp_client.send_command("Move-Tool", {"to_loc": [x, y]})
+                    try:
+                        globals()["last_move_point"] = (x, y)
+                        globals()["last_move_at"] = datetime.now()
+                        log.debug(f"[MOVE_LOG] Move-Tool to ({x},{y}) at {last_move_at}")
+                    except Exception:
+                        pass
                     await asyncio.sleep(random.uniform(0.05, 0.1))  # Minimal pause before click
                     await mcp_client.send_command("Click-Tool", {"loc": [x, y]})
+                    log.debug(f"[MOVE_LOG] Click-Tool at ({x},{y}) immediately after move")
+        
+                    # IMMEDIATE dodge after click to exit any hover popup before further checks
+                    try:
+                        await dodge_cursor_then_center(x, y)
+                        log.info(f"🛡️ SAFETY: Immediate Dodge+Center applied after click for button {i+1}")
+                    except Exception as e:
+                        log.warning(f"[DODGE] immediate dodge failed: {e}")
                     
-                    # IMMEDIATE post-click safety movement
-                    await asyncio.sleep(0.5)  # Longer pause to let content load after click
-                    
+                    # Allow UI to react a bit
+                    await asyncio.sleep(0.2)
+                    # Detect reply-input misclick around click area; if detected, skip this button
+                    try:
+                        screenshot_result_reply = await mcp_client.send_command("Screenshot-Tool", {})
+                        if screenshot_result_reply and hasattr(screenshot_result_reply, 'content') and screenshot_result_reply.content:
+                            sdata = screenshot_result_reply.content[0].text
+                            if "Base64 data: " in sdata:
+                                from .ocr_service import ocr_service
+                                ocr_res = ocr_service.extract_text_from_base64(sdata.split("Base64 data: ")[-1])
+                                otext = (ocr_res.get('text', '') or '').lower()
+                                if any(key in otext for key in ["antworten", "antwort", "reply", "repl"]):
+                                    log.warning("[MISCLICK] Reply input detected after click; skipping this button and continuing")
+                                    continue
+                    except Exception:
+                        pass
+                    await asyncio.sleep(0.1)
+
                     buttons_clicked += 1
                     log.info(f"🖱️ Successfully clicked expansion button {i+1}")
                     
@@ -1886,25 +2082,6 @@ async def find_and_click_expansion_buttons() -> bool:
                         raise
                     except Exception as e:
                         log.warning(f"⚠️ Immediate validation failed: {e}")
-                    
-                    # MODAL-SAFE post-click cursor positioning
-                    try:
-                        # Move to safe modal area only - avoid sidebars and outside areas
-                        await move_cursor_to_safe_modal_area(x, y)
-                        log.info(f"🛡️ SAFETY: Reset cursor to safe modal position after expansion click {i+1}")
-                        
-                        # Additional pause to ensure no accidental hover/clicks
-                        await asyncio.sleep(0.3)
-                        
-                    except Exception as safety_error:
-                        log.error(f"❌ MODAL SAFETY MOVEMENT FAILED: {safety_error}")
-                        # Simple emergency fallback - just use Safe-Center-Move-Tool
-                        try:
-                            await mcp_client.send_command("Safe-Center-Move-Tool", {})
-                            log.warning("⚠️ Used Safe-Center-Move-Tool as emergency fallback")
-                        except Exception as center_error:
-                            log.error(f"❌ Emergency Safe-Center-Move-Tool also failed: {center_error}")
-                            # No hardcoded coordinates - if both fail, continue without cursor movement
                     
                     # ENHANCED VALIDATION: Comprehensive URL/page validation
                     try:
