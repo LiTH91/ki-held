@@ -11,6 +11,8 @@ A Windows desktop app to scan social media pages, gather evidence, and fight onl
 - ✅ **Enhanced Button Detection**: State-Tool fallback with OCR/Template matching, bounding-box filtering, and pre-click validation
 - ✅ **Screenshot-Based Navigation**: Content-aware scrolling using screenshot hashing to detect page top/bottom
 - ✅ **Robust Template Matching**: High-confidence thresholds (0.8+) with double validation and comprehensive error handling
+- ✅ **Intelligent Profile Safety**: Smart whitelist system prevents false-positive profile clicks while preserving real button detection
+- ✅ **Chrome-MCP Integration**: Hybrid architecture with pixel-perfect scroll measurement and browser API access
 - ✅ **Performance Optimizations**: Reduced screenshot detection cycles, parallel tool execution, efficient hashing
 - ✅ **Bug Fixes**: Fixed numpy serialization, AttributeError handling, IndexError protection, and template access issues
 

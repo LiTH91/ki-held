@@ -53,3 +53,9 @@ Thumbs.db
 
 Tesseract-OCR/
 temp_cookies.txt
+
+# Chrome-MCP Extension and related files
+chrome-mcp-extension/
+chrome-mcp-server-*.zip
+CHROME_MCP_SETUP.md
+CHROME_MCP_STATUS.md

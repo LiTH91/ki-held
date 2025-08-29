@@ -3197,5 +3197,76 @@
       "Scan initialized...",
       "Navigating to https://www.facebook.com/oe24.at/posts/pfbid02ZsfXhA9Yq3UTLYJrYTJJ3yc5enwQnpxbcvyxZMqHmWHa9auurPt3jnZQiZ342wjzl..."
     ]
+  },
+  "281d1a87-a520-4b37-a7f5-174e75b603fa": {
+    "status": "awaiting_review",
+    "message": "Scan completed. 3 potentially offensive comments detected and ready for review.",
+    "results": [
+      {
+        "text": "2 Karl Barilich Wie war das mit den Flammenwerfern, die gegen Impfgegner oder Nichtgeimpfte eingesetzt werden sollen? Nur eine Frage",
+        "username": "Alle Kommentare w",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": false
+      },
+      {
+        "text": "2 Karl Barilich Wie war das mit den Flammenwerfern, die gegen Impfgegner oder Nichtgeimpfte eingesetzt werden sollen? Nur eine Frage",
+        "username": "Alle Kommentare w",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": false
+      },
+      {
+        "text": "2 Karl Barilich Wie war das mit den Flammenwerfern, die gegen Impfgegner oder Nichtgeimpfte eingesetzt werden sollen? Nur eine Frage",
+        "username": "Alle Kommentare w",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": false
+      }
+    ],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0WL2LmzXBynineCmqMMGna2jM6kXaYaAvQGa8CZxHVqiPS9ThT8UPGQnCbrzfK9zZl...",
+      "\u2705 Facebook workflow completed - all interactions handled automatically.",
+      "\u23ed\ufe0f Skipping additional scanning cycles (no scrolling needed).",
+      "Getting DOM content...",
+      "Received DOM content (length: 4384).",
+      "Analyzing content for hate speech...",
+      "Detected hate speech from Alle Kommentare w: '2 Karl Barilich Wie war das mit den Flammenwerfern...'. Analysis completed.",
+      "Detected hate speech from Alle Kommentare w: '2 Karl Barilich Wie war das mit den Flammenwerfern...'. Analysis completed.",
+      "Detected hate speech from Alle Kommentare w: '2 Karl Barilich Wie war das mit den Flammenwerfern...'. Analysis completed.",
+      "\ud83d\udd0d Found 3 potentially offensive comments ready for review.",
+      "\ud83d\udc64 Please review each comment to decide which evidence to create.",
+      "Scan completed. 3 potentially offensive comments detected and ready for review."
+    ],
+    "result": {
+      "is_hate": true,
+      "confidence": null,
+      "categories": [],
+      "explanation": "Found 3 comments requiring review.",
+      "pending_review_count": 3
+    }
+  },
+  "9c38603b-9ddd-49eb-a597-31f1ada312bc": {
+    "status": "in_progress",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0WL2LmzXBynineCmqMMGna2jM6kXaYaAvQGa8CZxHVqiPS9ThT8UPGQnCbrzfK9zZl..."
+    ]
   }
 }

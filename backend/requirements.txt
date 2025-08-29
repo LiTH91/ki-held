@@ -20,3 +20,4 @@ filelock
 pytesseract>=0.3.13  # OCR library for screenshot text recognition
 opencv-python>=4.8.0  # Computer vision library for template matching
 numpy>=1.24.0  # Required for OpenCV array operations
+aiohttp>=3.9.0  # HTTP client for Chrome-MCP communication

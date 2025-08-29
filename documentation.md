@@ -118,3 +118,23 @@ npm run tauri dev
 - **Reduced Screenshot Detection**: Optimized from 10 to 5 consecutive unchanged screens for faster end detection
 - **Parallel Tool Execution**: Maximized concurrent operations where possible
 - **Efficient Hashing**: Screenshot hashing uses first 1000 characters for speed while maintaining accuracy
+
+### Enhanced Profile Detection & Safety (2025-08-29)
+- **Intelligent Profile Recognition**: Smart filtering system that distinguishes between real buttons and profile links
+- **Positive Button Whitelist**: Immediate recognition of valid button text ('antwort', 'ansehen', 'kommentar', etc.) bypasses profile detection
+- **False Positive Prevention**: Removed short time indicators ('h', 'm', 'd', 'w') that caused false profile matches
+- **Two-Stage Validation**: 
+  1. **Whitelist Check**: If crop contains known button phrases → immediate approval
+  2. **Profile Check**: Only if not a clear button → check for profile indicators (names, long time phrases)
+- **Context-Aware Detection**: Considers word length (≥3 characters) and context to avoid misidentifying button text as profiles
+- **Comprehensive Logging**: Detailed OCR safety logs showing exactly why buttons are approved or rejected
+
+### Chrome-MCP Integration (2025-08-29)
+- **Hybrid MCP Architecture**: Windows-MCP for UI automation + Chrome-MCP for precise browser API access
+- **Pixel-Perfect Scroll Measurement**: `window.pageYOffset` tracking for exact distance measurement during pre-scrolling
+- **Advanced Navigation Strategy**:
+  - `measure_scroll_distance_and_preload()`: Measures actual pixel distance during content loading
+  - `return_to_anchor_with_distance()`: Uses measured distance for fast, precise anchor return
+- **Robust Fallback System**: Chrome-MCP failures automatically fall back to Windows-MCP screenshot-based methods
+- **Browser API Access**: Direct JavaScript injection for scroll position, page dimensions, and precise navigation
+- **Dependency Management**: Seamless integration with existing `uv` virtual environment setup

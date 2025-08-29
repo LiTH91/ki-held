@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import random
 import re
 from urllib.parse import urlparse
+from typing import Dict, Any
 print("[DEBUG mcp_service] About to import human_wait from utils")
 from .utils import human_wait
 from .logger import setup_logging
@@ -19,6 +20,9 @@ from pathlib import Path
 from .mcp_client import MCPClient
 
 mcp_client = MCPClient()
+
+# PATCH: Chrome MCP client for scroll position tracking and browser APIs
+from .chrome_mcp_client import get_chrome_mcp_client
 
 # Fatal control-flow exception used to abort extraction when navigation leaves the post/modal
 class AbortExtractionError(Exception):
@@ -844,13 +848,17 @@ async def execute_facebook_workflow(original_url: str = ""):
             anchor_data = anchor_screenshot.content[0].text
             log.info("📍 'Alle Kommentare' anchor screenshot captured")
         
-        # === Schritt 5: PRELOAD ALL COMMENTS ===
-        log.info("5️⃣ Starting aggressive pre-scroll to load all Facebook comments...")
-        await preload_all_facebook_comments()
+        # === Schritt 5: DISTANCE-MEASURED PRELOAD ===
+        log.info("5️⃣ Starting distance-measured pre-scroll to load all Facebook comments...")
+        scroll_distance_data = await measure_scroll_distance_and_preload()
         
-        # === Schritt 6: RETURN TO ALLE KOMMENTARE ANCHOR ===
-        log.info("6️⃣ Returning to 'Alle Kommentare' anchor point...")
-        await return_to_alle_kommentare_anchor()
+        # === Schritt 6: DISTANCE-GUIDED ANCHOR RETURN ===
+        log.info("6️⃣ Returning to 'Alle Kommentare' anchor using measured distance...")
+        anchor_found = await return_to_anchor_with_distance(scroll_distance_data)
+        
+        if not anchor_found:
+            log.warning("⚠️ Distance-guided return failed, trying template-only fallback...")
+            await return_to_alle_kommentare_anchor()
         
         # === Schritt 7: COMMENT EXTRACTION ===
         log.info("7️⃣ Starting progressive screenshot-based comment extraction...")
@@ -1056,7 +1064,7 @@ async def find_numbered_comment_buttons() -> bool:
             matches = template_service.match_template_in_base64(
                 base64_data, 
                 "alle-xx-kommentare-ansehen", 
-                threshold=0.6
+                threshold=0.7  # PATCH: Increased from 0.6 to 0.7 to reduce false positives
             )
             if matches:
                 best_match = matches[0]
@@ -1851,6 +1859,115 @@ async def final_cleanup_pass() -> bool:
         log.error(f"❌ Error during final cleanup pass: {e}")
         return False
 
+async def measure_scroll_distance_and_preload() -> Dict[str, Any]:
+    """
+    PATCH: Measure scroll distance during pre-loading for precise anchor return.
+    Uses Chrome-MCP to track actual pixel distances traveled.
+    
+    Returns:
+        Dict containing:
+        - scroll_distance_pixels: Total pixels scrolled down
+        - scroll_attempts: Number of scroll operations
+        - start_position: Starting scroll position
+        - end_position: Final scroll position
+    """
+    log.info("📏 [DISTANCE] Starting distance-measured pre-loading...")
+    
+    try:
+        # Get Chrome MCP client for scroll position tracking
+        chrome_client = await get_chrome_mcp_client()
+        
+        if not chrome_client.is_connected:
+            log.warning("⚠️ [DISTANCE] Chrome-MCP not connected, falling back to screenshot-only detection")
+            await preload_all_facebook_comments()
+            return {"scroll_distance_pixels": 0, "scroll_attempts": 0, "start_position": 0, "end_position": 0}
+        
+        # Record starting position
+        start_scroll = await chrome_client.get_scroll_position()
+        start_position = start_scroll.get("scrollTop", 0)
+        log.info(f"📏 [DISTANCE] Starting position: {start_position}px")
+        
+        # Start from the top
+        await mcp_client.send_command("Scroll-Tool", {"direction": "up", "wheel_times": 10})
+        await asyncio.sleep(2.0)
+        
+        # Update start position after going to top
+        start_scroll = await chrome_client.get_scroll_position()
+        start_position = start_scroll.get("scrollTop", 0)
+        log.info(f"📏 [DISTANCE] Adjusted start position: {start_position}px")
+        
+        # PATCH: Screenshot-based end detection with distance tracking
+        scroll_attempts = 0
+        consecutive_unchanged_screens = 0
+        max_unchanged_screens = 5  # Same as original
+        last_screenshot_hash = None
+        safety_limit = 500
+        
+        while consecutive_unchanged_screens < max_unchanged_screens and scroll_attempts < safety_limit:
+            scroll_attempts += 1
+            
+            # Take a screenshot to check current content
+            screenshot_result = await mcp_client.send_command("Screenshot-Tool", {})
+            if screenshot_result and hasattr(screenshot_result, 'content') and screenshot_result.content:
+                screenshot_data = screenshot_result.content[0].text
+                if "Base64 data: " in screenshot_data:
+                    base64_data = screenshot_data.split("Base64 data: ")[1]
+                    current_screenshot_hash = hash(base64_data[:1000])
+                    
+                    if last_screenshot_hash and current_screenshot_hash == last_screenshot_hash:
+                        consecutive_unchanged_screens += 1
+                        log.debug(f"[DISTANCE] Screen unchanged (consecutive: {consecutive_unchanged_screens}/{max_unchanged_screens})")
+                        if consecutive_unchanged_screens >= max_unchanged_screens:
+                            log.info(f"📏 [DISTANCE] Reached end after {scroll_attempts} scroll attempts (5 unchanged screens)")
+                            break
+                    else:
+                        if last_screenshot_hash:
+                            consecutive_unchanged_screens = 0
+                            log.debug(f"[DISTANCE] Screen changed, reset unchanged counter")
+                        last_screenshot_hash = current_screenshot_hash
+            
+            # Consistent scroll distance
+            scroll_distance = 5
+            await mcp_client.send_command("Scroll-Tool", {"direction": "down", "wheel_times": scroll_distance})
+            
+            # Shorter wait time for faster loading
+            await asyncio.sleep(1.5)
+            
+            # Progress logging
+            if scroll_attempts % 10 == 0:
+                current_scroll = await chrome_client.get_scroll_position()
+                current_position = current_scroll.get("scrollTop", 0)
+                distance_so_far = current_position - start_position
+                log.info(f"📏 [DISTANCE] Progress: {scroll_attempts} attempts, {distance_so_far}px traveled (unchanged screens: {consecutive_unchanged_screens}/5)")
+        
+        # Record final position
+        end_scroll = await chrome_client.get_scroll_position()
+        end_position = end_scroll.get("scrollTop", 0)
+        total_distance = end_position - start_position
+        
+        # Completion messages
+        if consecutive_unchanged_screens >= max_unchanged_screens:
+            log.info(f"📏 [DISTANCE] Completed distance-measured pre-scroll after {scroll_attempts} attempts")
+            log.info(f"📏 [DISTANCE] Total distance traveled: {total_distance}px ({start_position}px → {end_position}px)")
+        else:
+            log.warning(f"📏 [DISTANCE] Pre-scroll stopped at safety limit ({safety_limit} attempts)")
+        
+        log.info("📏 [DISTANCE] Distance-measured pre-scroll complete - will return to anchor with precision")
+        
+        return {
+            "scroll_distance_pixels": total_distance,
+            "scroll_attempts": scroll_attempts,
+            "start_position": start_position,
+            "end_position": end_position
+        }
+        
+    except Exception as e:
+        log.error(f"❌ [DISTANCE] Error during distance-measured pre-scroll: {e}")
+        # Fallback to original method
+        log.info("📏 [DISTANCE] Falling back to screenshot-only pre-loading")
+        await preload_all_facebook_comments()
+        return {"scroll_distance_pixels": 0, "scroll_attempts": 0, "start_position": 0, "end_position": 0}
+
 async def preload_all_facebook_comments():
     """
     PATCH: Aggressive pre-scrolling strategy to load ALL Facebook comments.
@@ -1920,6 +2037,137 @@ async def preload_all_facebook_comments():
     except Exception as e:
         log.error(f"❌ [PRELOAD] Error during pre-scroll: {e}")
         # Continue anyway - extraction might still work with partial content
+
+async def return_to_anchor_with_distance(scroll_distance_data: Dict[str, Any]) -> bool:
+    """
+    PATCH: Return to anchor using measured distance for precision guidance.
+    Combines distance-based estimation with template matching for robust navigation.
+    
+    Args:
+        scroll_distance_data: Distance data from measure_scroll_distance_and_preload()
+        
+    Returns:
+        bool: True if anchor found, False otherwise
+    """
+    log.info("📍 [DISTANCE] Returning to anchor using measured distance...")
+    
+    try:
+        chrome_client = await get_chrome_mcp_client()
+        
+        if not chrome_client.is_connected or scroll_distance_data.get("scroll_distance_pixels", 0) == 0:
+            log.warning("⚠️ [DISTANCE] No distance data or Chrome-MCP unavailable, falling back to template-only search")
+            return await return_to_alle_kommentare_anchor()
+        
+        total_distance = scroll_distance_data["scroll_distance_pixels"]
+        start_position = scroll_distance_data["start_position"]
+        
+        # Calculate target position (with 10% buffer to avoid overshooting)
+        target_position = start_position + (total_distance * 0.1)
+        log.info(f"📍 [DISTANCE] Target position: {target_position}px (10% from start, total distance was {total_distance}px)")
+        
+        # Phase 1: Fast scroll to estimated target area
+        current_scroll = await chrome_client.get_scroll_position()
+        current_position = current_scroll.get("scrollTop", 0)
+        
+        log.info(f"📍 [DISTANCE] Current position: {current_position}px, target: {target_position}px")
+        
+        # If we're far from target, do large scrolls first
+        while current_position > target_position + 500:  # 500px buffer
+            await mcp_client.send_command("Scroll-Tool", {"direction": "up", "wheel_times": 10})
+            await asyncio.sleep(1.0)
+            current_scroll = await chrome_client.get_scroll_position()
+            current_position = current_scroll.get("scrollTop", 0)
+            log.debug(f"[DISTANCE] Fast scroll: {current_position}px")
+        
+        log.info(f"📍 [DISTANCE] Near target area ({current_position}px), switching to template search...")
+        
+        # Phase 2: Template-based search in target area
+        scroll_attempts = 0
+        consecutive_unchanged_screens = 0
+        max_unchanged_screens = 5
+        last_screenshot_hash = None
+        safety_limit = 50  # Smaller limit since we're in the right area
+        
+        while consecutive_unchanged_screens < max_unchanged_screens and scroll_attempts < safety_limit:
+            scroll_attempts += 1
+            
+            # Take screenshot and look for anchor
+            screenshot_result = await mcp_client.send_command("Screenshot-Tool", {})
+            if not screenshot_result or not hasattr(screenshot_result, 'content') or not screenshot_result.content:
+                log.warning(f"[DISTANCE] Failed to capture screenshot on attempt {scroll_attempts}")
+                await asyncio.sleep(1.0)
+                continue
+                
+            screenshot_data = screenshot_result.content[0].text
+            if "Base64 data: " not in screenshot_data:
+                continue
+                
+            base64_data = screenshot_data.split("Base64 data: ")[1]
+            
+            # Screenshot-based top detection
+            current_screenshot_hash = hash(base64_data[:1000])
+            if last_screenshot_hash and current_screenshot_hash == last_screenshot_hash:
+                consecutive_unchanged_screens += 1
+                log.debug(f"[DISTANCE] Screen unchanged (consecutive: {consecutive_unchanged_screens}/{max_unchanged_screens})")
+                if consecutive_unchanged_screens >= max_unchanged_screens:
+                    log.info(f"📍 [DISTANCE] Reached page top after {scroll_attempts} attempts (screenshot-based detection)")
+                    break
+            else:
+                if last_screenshot_hash:
+                    consecutive_unchanged_screens = 0
+                    log.debug(f"[DISTANCE] Screen changed, reset unchanged counter")
+                last_screenshot_hash = current_screenshot_hash
+            
+            # Look for anchor template
+            matches = template_service.match_template_in_base64(
+                base64_data,
+                "alle-kommentare-confirmed",
+                threshold=0.75
+            )
+            
+            if matches:
+                best_match = matches[0]
+                confidence = best_match.confidence
+                log.info(f"🎯 [DISTANCE] Potential anchor found with confidence {confidence:.3f} after {scroll_attempts} attempts")
+                
+                if confidence >= 0.8:
+                    log.info(f"✅ [DISTANCE] High confidence match - accepting as anchor")
+                    
+                    # Small adjustment scroll to center the anchor nicely
+                    await mcp_client.send_command("Scroll-Tool", {"direction": "down", "wheel_times": 2})
+                    await asyncio.sleep(1.0)
+                    
+                    # Log final position
+                    final_scroll = await chrome_client.get_scroll_position()
+                    final_position = final_scroll.get("scrollTop", 0)
+                    log.info(f"📍 [DISTANCE] Successfully returned to anchor at {final_position}px")
+                    return True
+                else:
+                    log.warning(f"⚠️ [DISTANCE] Low confidence {confidence:.3f} - continuing search")
+            
+            # Moderate scroll distance in target area
+            await mcp_client.send_command("Scroll-Tool", {"direction": "up", "wheel_times": 5})
+            await asyncio.sleep(1.0)
+            
+            # Progress logging
+            if scroll_attempts % 10 == 0:
+                current_scroll = await chrome_client.get_scroll_position()
+                current_position = current_scroll.get("scrollTop", 0)
+                log.info(f"📍 [DISTANCE] Search progress: {scroll_attempts} attempts at {current_position}px (unchanged screens: {consecutive_unchanged_screens}/{max_unchanged_screens})")
+        
+        # End messages
+        if consecutive_unchanged_screens >= max_unchanged_screens:
+            log.warning(f"⚠️ [DISTANCE] Reached page top after {scroll_attempts} attempts - anchor not found in visible area")
+            log.info("📍 [DISTANCE] Starting extraction from current position (likely near page top)")
+        else:
+            log.error(f"❌ [DISTANCE] Anchor search stopped at safety limit ({safety_limit} attempts)")
+            log.error("❌ [DISTANCE] Continuing anyway - extraction may start from wrong position")
+        return False
+        
+    except Exception as e:
+        log.error(f"❌ [DISTANCE] Error during distance-guided anchor return: {e}")
+        log.info("📍 [DISTANCE] Falling back to template-only anchor search")
+        return await return_to_alle_kommentare_anchor()
 
 async def return_to_alle_kommentare_anchor():
     """
@@ -2443,8 +2691,8 @@ async def find_and_click_expansion_buttons() -> bool:
             
             # Find template matches
             from .template_service import template_service
-            # PATCH: Conservative threshold to prevent false-positives on profiles
-            detection_threshold = 0.65 if template_name == "Antwort-ansehen" else 0.6  # Higher to reduce false-positives
+            # PATCH: Higher thresholds to prevent false-positives on profiles (especially after martin.eder case)
+            detection_threshold = 0.75 if template_name == "Antwort-ansehen" else 0.7  # PATCH: Increased thresholds significantly
             matches = template_service.match_template_in_base64(screenshot_data, template_name, threshold=detection_threshold)
             
             if matches:
@@ -2593,21 +2841,55 @@ async def find_and_click_expansion_buttons() -> bool:
                                     crop_ocr_result = ocr_service.extract_text_from_base64(cropped_b64)
                                     crop_text = _normalize(crop_ocr_result.get('text', '') if crop_ocr_result else '')
                                     
-                                    # Enhanced profile detection keywords
+                                    # PATCH: Enhanced profile detection keywords including names and time indicators
                                     profile_indicators = [
+                                        # Profile actions
                                         'freund', 'nachricht', 'senden', 'hinzufügen', 'friend', 'message',
-                                        'lagerarbeiter', 'kommissionierer', 'arbeiter', '@', '€', 'eur',
-                                        'follow', 'folgen', 'abonnieren', 'subscribe'
+                                        'follow', 'folgen', 'abonnieren', 'subscribe',
+                                        # Job titles/profile descriptions that appear near profile links
+                                        'lagerarbeiter', 'kommissionierer', 'arbeiter', 'angestellte', 'manager',
+                                        'bei', 'arbeitet bei', 'works at', 'studiert', 'studies',
+                                        # Common German names (from the error case: martin.eder.906)
+                                        'martin', 'eder', 'thomas', 'michael', 'andreas', 'stefan', 'christian',
+                                        'peter', 'wolfgang', 'alexander', 'daniel', 'matthias', 'florian',
+                                        'markus', 'simon', 'johannes', 'manuel', 'david', 'sebastian',
+                                        'maria', 'anna', 'julia', 'lisa', 'sarah', 'nicole', 'sandra',
+                                        'claudia', 'andrea', 'katharina', 'petra', 'sabine', 'christina',
+                                        # Time indicators near profile links (only longer words to avoid false positives)
+                                        'std', 'min', 'tag', 'woche', 'monat', 'stunden', 'minuten', 'tage',
+                                        'vor', 'ago', 'vor', 'gestern', 'yesterday', '·', '•',
+                                        # Profile indicators
+                                        '@', '€', 'eur', 'profile', 'profil', 'user', 'person'
                                     ]
                                     
-                                    detected_indicators = [word for word in profile_indicators if word in crop_text]
-                                    if detected_indicators:
-                                        log.warning(f"🚨 OCR SAFETY: Profile indicators detected in click area: {detected_indicators}")
-                                        log.warning(f"🚨 Crop text: '{crop_text[:100]}...'")
-                                        log.warning(f"🚨 SKIPPING button {i+1} to avoid profile click!")
-                                        continue  # Skip this button entirely
+                                    # PATCH: Positive whitelist for known button texts
+                                    crop_text_lower = crop_text.lower()
+                                    valid_button_phrases = [
+                                        'antwort', 'antworten', 'ansehen', 'kommentar', 'kommentare', 
+                                        'alle', 'weitere', 'mehr', 'zeigen', 'show', 'view',
+                                        'reply', 'replies', 'comment', 'comments', 'see', 'see more'
+                                    ]
+                                    
+                                    # If crop contains clear button text, skip profile detection entirely
+                                    is_valid_button = any(phrase in crop_text_lower for phrase in valid_button_phrases)
+                                    if is_valid_button:
+                                        log.info(f"✅ OCR SAFETY: Valid button text detected: '{crop_text[:50]}' - skipping profile check")
                                     else:
-                                        log.info(f"✅ OCR SAFETY: Click area clean, crop text: '{crop_text[:50]}...'")
+                                        # Only check for profile indicators if it's not a clear button
+                                        detected_indicators = []
+                                        for word in profile_indicators:
+                                            if len(word) <= 2:  # Skip single letters/short words
+                                                continue
+                                            if word in crop_text_lower:
+                                                detected_indicators.append(word)
+                                    
+                                        if detected_indicators:
+                                            log.warning(f"🚨 OCR SAFETY: Profile indicators detected in click area: {detected_indicators}")
+                                            log.warning(f"🚨 Crop text: '{crop_text[:100]}...'")
+                                            log.warning(f"🚨 SKIPPING button {i+1} to avoid profile click!")
+                                            continue  # Skip this button entirely
+                                        else:
+                                            log.info(f"✅ OCR SAFETY: Click area clean, crop text: '{crop_text[:50]}...'")
                                         
                                 except Exception as crop_error:
                                     log.debug(f"Crop OCR failed, using full screenshot: {crop_error}")
