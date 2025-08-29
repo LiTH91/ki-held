@@ -30,3 +30,6 @@ async def test_abort_propagates_and_stops_extraction(monkeypatch):
     assert called_scroll["value"] is False
 
 
+
+
+

@@ -5,13 +5,14 @@ A Windows desktop app to scan social media pages, gather evidence, and fight onl
 - Tauri desktop frontend (React + TypeScript)
 - Windows-MCP automation service (FastMCP over STDIO)
 
-### Latest Updates (2025-08-26)
-- ✅ **Fatal Abort on URL Change**: If navigation leaves the original Facebook post/modal, the workflow aborts immediately (no move/click/scroll/shortcut).
-- ✅ **Hard-Stop Guard**: A global hard-stop flag blocks any further desktop interactions after a fatal event.
-- ✅ **Modal-Safe Movements**: Cursor movements and clicks are constrained to the modal content area; expansion clicks are clamped using percentage-of-screenshot bounds.
-- ✅ **Alle Kommentare Exemption**: The initial filter selection click is not clamped (prevents misses on varied layouts/zoom).
-- ✅ **Start Script Hardening**: `start-app.ps1` now clears Python caches and kills lingering uvicorn processes before launch.
-- ✅ **Unit Test**: Added test to ensure abort propagation stops extraction without scrolling.
+### Latest Updates (2025-08-29)
+- ✅ **Dynamic Content Loading**: Screenshot-based end detection for automatic lazy-content loading (Facebook comments)
+- ✅ **Adaptive Scroll Strategy**: Three-phase approach (pre-load → anchor return → adaptive extraction) with no fixed limits
+- ✅ **Enhanced Button Detection**: State-Tool fallback with OCR/Template matching, bounding-box filtering, and pre-click validation
+- ✅ **Screenshot-Based Navigation**: Content-aware scrolling using screenshot hashing to detect page top/bottom
+- ✅ **Robust Template Matching**: High-confidence thresholds (0.8+) with double validation and comprehensive error handling
+- ✅ **Performance Optimizations**: Reduced screenshot detection cycles, parallel tool execution, efficient hashing
+- ✅ **Bug Fixes**: Fixed numpy serialization, AttributeError handling, IndexError protection, and template access issues
 
 ### Prerequisites
 - Windows 10/11

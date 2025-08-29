@@ -69,42 +69,52 @@ npm run tauri dev
 - Root cause: `fastmcp.utilities.cli` availability differs between versions; banner output on STDIO broke the handshake and caused "Connection closed".
 - Resolution: define a no-op `log_server_banner` when the module is missing; add early `startup_debug.log` breadcrumbs; ensure `mcp_client.py` launches with the Windows-MCP venv python and correct cwd.
 
-## Recent changes (2025-08-26)
+## Recent changes (2025-08-29)
 
-### Enhanced Facebook Comment Extraction
-- **Progressive Screenshot Strategy**: Implemented `extract_comments_via_screenshots()` function using OCR + template matching
-- **Multi-Method Detection**: Combines OCR text extraction with OpenCV template matching for robust button detection
-- **Automatic Expansion**: Finds and clicks "alle XX Kommentare ansehen" and "Antwort ansehen" buttons to expand comment threads
-- **Anti-Bot Bypass**: Uses screenshot-based extraction when Facebook blocks DOM/State-Tool access
+### Dynamic Scroll-Based Content Loading
+- **Screenshot-Based End Detection**: Pre-scroll phase uses screenshot hashing to detect when page bottom is reached (5 consecutive unchanged screens)
+- **Adaptive Content Loading**: Aggressive pre-scrolling to load all lazy-loaded Facebook comments before extraction begins
+- **Screenshot-Based Anchor Return**: Dynamic return to "Alle Kommentare" anchor using template matching with screenshot-based top detection
+- **No More Fixed Limits**: Replaced all artificial scroll limits with content-aware detection mechanisms
 
-### Safety & Abort Improvements
-- **Fatal Abort on URL Change**: If navigation leaves the original post/modal, raise a fatal abort and stop all interactions immediately.
-- **Hard-Stop Guard**: Global `hard_stop_active` blocks Move/Click/Scroll/Type/Shortcut at the rate-limiter layer.
-- **Modal-Safe Cursor**: `move_cursor_to_safe_modal_area()` keeps movement inside the modal; initial "Alle Kommentare" click is not clamped.
-- **Percentage-Based Clamp**: Expansion clicks are clamped to modal bounds computed as percentages of the current screenshot size.
+### Robust Button Detection & Validation
+- **Enhanced find_and_click_button_robust()**: State-Tool fallback with immediate OCR/Template switching when State-Tool returns empty
+- **Bounding-Box Filtering**: Click coordinates filtered to modal area (x: 20%-80%, y: 15%-88% of screen)
+- **Pre-Click Validation**: Crop screenshots around target coordinates for secondary validation before clicking
+- **Template Match Debugging**: Comprehensive logging for template confidence, coordinates, and validation results
+
+### Advanced Scroll Strategy
+- **Three-Phase Approach**:
+  1. **Pre-Load Phase**: Aggressive downward scrolling until screenshot-based end detection
+  2. **Anchor Return Phase**: Dynamic upward scrolling with template matching until "Alle Kommentare" found
+  3. **Adaptive Extraction Phase**: Dynamic screenshot-based extraction with button detection
+- **Content-Aware Termination**: Uses screenshot hashing instead of arbitrary attempt limits
 
 ### Technical Implementation
 - **New Functions Added**:
-  - `extract_comments_via_screenshots()`: Main progressive extraction controller
-  - `extract_visible_comments_ocr()`: OCR-based comment text extraction  
-  - `find_and_click_expansion_buttons()`: Template matching for UI button detection
-  - `parse_comments_from_ocr()`: Structured comment data parsing from OCR text
-  - `clamp_to_modal(x, y, image_width, image_height)`: Percentage-of-screenshot clamping for expansion clicks
-  - `AbortExtractionError`: Control-flow exception to stop extraction immediately on URL/profile navigation
-- **Template Matching**: Uses pre-defined PNG templates for button recognition
-- **OCR Integration**: pytesseract for text extraction from screenshots
-- **Human-like Behavior**: Random delays, natural scroll patterns, hesitation before clicks
+  - `preload_all_facebook_comments()`: Aggressive pre-scrolling with screenshot-based end detection
+  - `return_to_alle_kommentare_anchor()`: Dynamic anchor return with template matching
+  - `extract_comments_adaptive()`: Adaptive extraction replacing fixed-cycle approach
+  - `is_within_modal_bounds()`: Bounding-box validation for click coordinates
+  - `pre_click_validate()`: Secondary validation using cropped screenshots
+  - `find_button_with_ocr_enhanced()` & `find_button_with_template_matching_enhanced()`: Enhanced detection with validation
+- **Screenshot Hashing**: Content-based detection using `hash(base64_data[:1000])` for performance
+- **Dynamic Logging**: Progress tracking with unchanged screen counters and attempt statistics
 
-### Bug Fixes
-- **Missing Function Error**: Removed broken `screenshot_element()` call that caused scan crashes
-- **Import Errors**: Fixed OCR and template service import issues
-- **Indentation Issues**: Resolved syntax errors preventing backend startup
+### Bug Fixes & Optimizations
+- **False Positive Reduction**: Increased template matching thresholds and added double validation
+- **Numpy Serialization Fix**: Convert `numpy.int64` coordinates to native Python `int` before JSON serialization
+- **AttributeError Fixes**: Corrected `MatchResult` attribute access (`.center[0]` instead of `.get("x")`)
+- **IndexError Protection**: Added bounds checking in OCR word processing
+- **Fallback Mechanisms**: Enhanced functions fall back to original implementations on errors
 
-### Facebook Workflow Updates
-- **State-Tool Fallback**: When State-Tool returns empty (Facebook blocking), automatically switches to OCR/template methods
-- **Progressive Scrolling**: Intelligently scrolls to find more content when no expansion buttons are visible (disabled by fatal abort)
-- **Comment Integration**: Screenshot-extracted comments are properly integrated into final DOM output
-- **Extraction Limits**: Configurable cycle limits (default: 15) with consecutive scroll attempt limits (2)
+### Facebook Workflow Updates (2025-08-29)
+- **Dynamic Content Discovery**: No more fixed cycle limits - adapts to actual post length
+- **Intelligent Scroll Distance**: 8 wheel_times for upward scrolling (faster return), 5 for downward (consistent loading)
+- **Content-Aware Stopping**: Screenshot comparison determines when scrolling should stop
+- **Robust Anchor Detection**: High-confidence template matching (0.8+ threshold) with multiple validation layers
 
-### Start Script Hardening
-- `start-app.ps1` clears backend `__pycache__` and `.pyc`, kills lingering uvicorn processes, and prints current git rev before launching services.
+### Performance Improvements
+- **Reduced Screenshot Detection**: Optimized from 10 to 5 consecutive unchanged screens for faster end detection
+- **Parallel Tool Execution**: Maximized concurrent operations where possible
+- **Efficient Hashing**: Screenshot hashing uses first 1000 characters for speed while maintaining accuracy

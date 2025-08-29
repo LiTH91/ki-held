@@ -20,7 +20,6 @@ const ScanStatus = () => {
   const [statusData, setStatusData] = useState<ScanStatusData | null>(null);
   const [error, setError] = useState('');
   const scanId = location.state?.scanId;
-  const [username, setUsername] = useState('');
 
   useEffect(() => {
     if (!scanId) {
@@ -39,7 +38,7 @@ const ScanStatus = () => {
           clearInterval(interval);
           const lastMessage = response.data.messages[response.data.messages.length - 1];
           setError(lastMessage || 'Scan failed');
-        } else if (response.data.status === 'completed') {
+        } else if (response.data.status === 'completed' || response.data.status === 'awaiting_review') {
           clearInterval(interval);
         }
       } catch (err) {
@@ -54,15 +53,6 @@ const ScanStatus = () => {
   const handleExport = () => {
     // TODO: Implement PDF export functionality
     console.log('Exporting PDF for scan ID:', scanId);
-  };
-
-  const handleAssignUser = async () => {
-    try {
-      await axios.post(`http://localhost:8000/api/scan/${scanId}/assign-user`, { username });
-      // Optionally, show a success message
-    } catch (err) {
-      setError('Failed to assign user. Please try again.');
-    }
   };
 
   console.log('[DEBUG] Rendering with statusData:', statusData);
@@ -104,16 +94,36 @@ const ScanStatus = () => {
           </ul>
         </div>
 
+        {statusData.status === 'awaiting_review' && (
+          <div className="mt-6">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">Review Required</h3>
+            <div className="mt-2 text-sm text-gray-600">
+              <p className="font-semibold text-orange-600">
+                {statusData.result?.pending_review_count || 0} potentially offensive comments detected
+              </p>
+              <p className="mt-2">
+                Please review each comment and decide whether to create evidence. You can view the comment content and user information before making your decision.
+              </p>
+            </div>
+            <div className="mt-4">
+              <button
+                onClick={() => window.location.href = `/review/${scanId}`}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+              >
+                Start Review Process ({statusData.result?.pending_review_count || 0} comments)
+              </button>
+            </div>
+          </div>
+        )}
+
         {statusData.status === 'completed' && (
           <div className="mt-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900">Scan Complete</h3>
             {statusData.result ? (
               <div className="mt-2 text-sm text-gray-600">
                 <p className={`font-semibold ${statusData.result.is_hate ? 'text-red-600' : 'text-green-600'}`}>
-                  {statusData.result.is_hate ? 'Hate Speech Detected' : 'No Hate Speech Detected'}
+                  {statusData.result.is_hate ? 'Review Completed' : 'No Hate Speech Detected'}
                 </p>
-                <p><strong>Confidence:</strong> {statusData.result.confidence ? (statusData.result.confidence * 100).toFixed(2) + '%' : 'N/A'}</p>
-                <p><strong>Categories:</strong> {statusData.result.categories ? statusData.result.categories.join(', ') : 'None'}</p>
                 <p><strong>Explanation:</strong> {statusData.result.explanation || 'No explanation provided.'}</p>
               </div>
             ) : (
@@ -122,19 +132,28 @@ const ScanStatus = () => {
               </p>
             )}
             <div className="mt-4">
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                Assign to Username
-              </label>
-              <input
-                type="text"
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
-              />
-              <button onClick={handleAssignUser} className="mt-2 w-full flex justify-center py-2 px-4 border">
-                Assign User and Save Evidence
-              </button>
+              <div className="bg-green-50 border border-green-200 rounded-md p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-green-800">
+                      Process Complete
+                    </h3>
+                    <div className="mt-2 text-sm text-green-700">
+                      <p>
+                        {statusData.result?.is_hate 
+                          ? "Evidence has been created for approved comments and securely saved."
+                          : "Scan completed successfully. No evidence creation needed."
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

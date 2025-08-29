@@ -27,6 +27,23 @@ class AbortExtractionError(Exception):
 # Global HARD STOP flag to prevent any further desktop interactions after fatal abort
 hard_stop_active: bool = False
 
+# PATCH: string normalization utility for FB text matching
+def _normalize(s: str) -> str:
+    """
+    Normalize Facebook UI text:
+    - remove zero-width chars
+    - replace NBSP with normal space
+    - lowercase, strip
+    - collapse multiple spaces
+    """
+    if s is None:
+        return ""
+    s = s.replace("\xa0", " ")
+    s = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", s)
+    s = s.lower().strip()
+    s = " ".join(s.split())
+    return s
+
 # Movement diagnostics
 last_move_point: tuple[int, int] | None = None
 last_move_at: datetime | None = None
@@ -298,10 +315,12 @@ async def find_button_with_template_matching(button_types: list[str]) -> bool:
             if not template_name:
                 continue
                 
+            # PATCH: Conservative threshold to avoid false-positives that click on profiles
+            detection_threshold = 0.65 if template_name == "Antwort-ansehen" else 0.6  # Higher to reduce false-positives
             matches = template_service.match_template_in_base64(
                 base64_data, 
                 template_name, 
-                threshold=0.6
+                threshold=detection_threshold
             )
             
             if matches:
@@ -412,6 +431,9 @@ async def find_and_click_button_robust(button_texts: list[str], max_retries: int
     - Attempt 1: State-Tool (schnell)
     - Attempt 2: State-Tool + OCR + Template (umfassend)
     """
+    # PATCH: State-Tool Fallback - will_try_ocr_now wird immer True bei leerem State-Tool
+    will_try_ocr_now = False
+    
     for attempt in range(max_retries):
         try:
             log.info(f"🔍 Attempt {attempt + 1}/{max_retries}: Searching for buttons: {button_texts}")
@@ -420,34 +442,46 @@ async def find_and_click_button_robust(button_texts: list[str], max_retries: int
             # === METHOD 1: State-Tool Text Search ===
             # Small reliability wait to allow dynamic content to settle
             await asyncio.sleep(random.uniform(0.6, 1.2))
-            state_result = await mcp_client.send_command("State-Tool", {"use_vision": False})
-            state_data = state_result.data if hasattr(state_result, 'data') and state_result.data else ''
+            
+            # PATCH: State-Tool Fallback - Exception handling für State-Tool
+            try:
+                state_result = await mcp_client.send_command("State-Tool", {"use_vision": False})
+                state_data = state_result.data if hasattr(state_result, 'data') and state_result.data else ''
+            except Exception as e:
+                log.error(f"🛑 State-Tool exception: {e}")
+                state_data = ''
             
             log.info(f"📄 State data length: {len(state_data)}")
             
-            # CRITICAL: Check for empty State-Tool data
+            # PATCH: State-Tool Fallback - Bei leerem State-Tool sofort OCR+Template
             if len(state_data) == 0:
                 log.error("🛑 CRITICAL: State-Tool returned empty data!")
-                log.error("   This indicates Windows-MCP connection issues or browser problems.")
-                log.error("   Possible causes:")
-                log.error("   • Chrome/browser not properly focused")
-                log.error("   • Windows-MCP server connection lost") 
-                log.error("   • Page not fully loaded")
-                log.error("   • Browser accessibility issues")
-                # Don't continue with empty data
-                will_try_ocr = attempt >= 1
-                log.info(f"[ROBUST] Empty State-Tool data. will_try_ocr_now={will_try_ocr}")
-                if will_try_ocr:  # Try advanced methods immediately on empty data
-                    log.info("🔄 Empty data detected - trying OCR immediately...")
+                log.error("[OCR_FALLBACK] Activating OCR+Template fallback immediately")
+                will_try_ocr_now = True
+                
+                log.info("🔄 Empty data detected - trying OCR immediately...")
+                # PATCH: Fallback auf ursprüngliche Funktionen wenn Enhanced Funktionen Probleme haben
+                try:
+                    ocr_success = await find_button_with_ocr_enhanced(button_texts)
+                    if ocr_success:
+                        return True
+                except Exception as ocr_e:
+                    log.warning(f"[OCR_FALLBACK] Enhanced OCR failed: {ocr_e}, trying original OCR...")
                     ocr_success = await find_button_with_ocr(button_texts)
                     if ocr_success:
                         return True
-                    
-                    log.info("🔄 OCR failed - trying Template Matching...")
+                
+                log.info("🔄 OCR failed - trying Template Matching...")
+                try:
+                    template_success = await find_button_with_template_matching_enhanced(button_texts)
+                    if template_success:
+                        return True
+                except Exception as template_e:
+                    log.warning(f"[OCR_FALLBACK] Enhanced Template failed: {template_e}, trying original Template...")
                     template_success = await find_button_with_template_matching(button_texts)
                     if template_success:
                         return True
-                        
+                    
                 log.warning(f"❌ Attempt {attempt + 1}: State-Tool empty + advanced methods failed")
                 continue
             
@@ -455,6 +489,23 @@ async def find_and_click_button_robust(button_texts: list[str], max_retries: int
             
             # Normalisiere den gesamten State-Text
             normalized_state = normalize_facebook_text(state_data)
+            
+            # PATCH: Bounding-Box Filter - Screenshot-Dimensionen für Modal-Bounds abrufen
+            iw = ih = None
+            try:
+                screenshot_result2 = await mcp_client.send_command("Screenshot-Tool", {})
+                if screenshot_result2 and hasattr(screenshot_result2, 'content') and screenshot_result2.content:
+                    sdata = screenshot_result2.content[0].text
+                    if "Base64 data: " in sdata:
+                        import base64, cv2
+                        import numpy as np
+                        b64 = sdata.split("Base64 data: ")[1]
+                        img_bytes = base64.b64decode(b64)
+                        img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
+                        img = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+                        ih, iw = (img.shape[0], img.shape[1]) if img is not None else (None, None)
+            except Exception:
+                pass
             
             import re
             for line in state_data.split('\n'):
@@ -472,28 +523,25 @@ async def find_and_click_button_robust(button_texts: list[str], max_retries: int
                         match = re.search(r'\((\d+),\s*(\d+)\)', normalized_line)
                         if match:
                             x, y = int(match.group(1)), int(match.group(2))
+                            
+                            # PATCH: Bounding-Box Filter - Prüfe Modal-Bounds
+                            if not is_within_modal_bounds(x, y, iw, ih):
+                                log.warning(f"[FILTER_LOG] Coordinates ({x}, {y}) outside modal bounds - skipping")
+                                continue
+                            
                             # Do not clamp for 'Alle Kommentare' dropdown selection
                             if normalize_facebook_text(candidate) not in (normalize_facebook_text("Alle Kommentare"), normalize_facebook_text("All comments")):
-                                # Use percentage clamp based on latest screenshot size
-                                iw = ih = None
-                                try:
-                                    screenshot_result2 = await mcp_client.send_command("Screenshot-Tool", {})
-                                    if screenshot_result2 and hasattr(screenshot_result2, 'content') and screenshot_result2.content:
-                                        sdata = screenshot_result2.content[0].text
-                                        if "Base64 data: " in sdata:
-                                            import base64, cv2
-                                            import numpy as np
-                                            b64 = sdata.split("Base64 data: ")[1]
-                                            img_bytes = base64.b64decode(b64)
-                                            img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
-                                            img = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
-                                            ih, iw = (img.shape[0], img.shape[1]) if img is not None else (None, None)
-                                except Exception:
-                                    pass
                                 x, y = clamp_to_modal(x, y, image_width=iw, image_height=ih)
-                                log.info(f"✅ Found '{candidate}' at ({x}, {y}) [modal-clamped]. Clicking it.")
+                                log.info(f"✅ Found '{candidate}' at ({x}, {y}) [modal-clamped]")
                             else:
-                                log.info(f"✅ Found '{candidate}' at ({x}, {y}) [no clamp]. Clicking it.")
+                                log.info(f"✅ Found '{candidate}' at ({x}, {y}) [no clamp]")
+                            
+                            # PATCH: Re-enable Pre-Click Validation - prevents false-positive clicks on profiles
+                            if not await pre_click_validate(x, y, candidate):
+                                log.warning(f"[SKIP_LOG] Pre-click validation failed for '{candidate}' at ({x}, {y}) - preventing profile click")
+                                continue
+                            
+                            log.info(f"✅ Clicking '{candidate}' at ({x}, {y})")
                             await mcp_client.send_command("Click-Tool", {"loc": [x, y]})
                             
                             # Record last focus point
@@ -507,15 +555,27 @@ async def find_and_click_button_robust(button_texts: list[str], max_retries: int
             
             # === EARLY FALLBACK: Try advanced methods after first failure ===
             if attempt >= 1:  # Nach dem 2. Versuch (attempt 0, 1)
-                log.info("🔄 Quick fallback to OCR-based button search...")
-                ocr_success = await find_button_with_ocr(button_texts)
-                if ocr_success:
-                    return True
+                log.info("[OCR_FALLBACK] Quick fallback to OCR-based button search...")
+                try:
+                    ocr_success = await find_button_with_ocr_enhanced(button_texts)
+                    if ocr_success:
+                        return True
+                except Exception as ocr_e:
+                    log.warning(f"[OCR_FALLBACK] Enhanced OCR failed: {ocr_e}, trying original OCR...")
+                    ocr_success = await find_button_with_ocr(button_texts)
+                    if ocr_success:
+                        return True
                 
-                log.info("🔄 Quick fallback to Template Matching...")
-                template_success = await find_button_with_template_matching(button_texts)
-                if template_success:
-                    return True
+                log.info("[OCR_FALLBACK] Quick fallback to Template Matching...")
+                try:
+                    template_success = await find_button_with_template_matching_enhanced(button_texts)
+                    if template_success:
+                        return True
+                except Exception as template_e:
+                    log.warning(f"[OCR_FALLBACK] Enhanced Template failed: {template_e}, trying original Template...")
+                    template_success = await find_button_with_template_matching(button_texts)
+                    if template_success:
+                        return True
             
             # Reduced wait time for faster execution
             if attempt < max_retries - 1:
@@ -529,6 +589,175 @@ async def find_and_click_button_robust(button_texts: list[str], max_retries: int
                 await asyncio.sleep(1.0)  # Reduced error wait time
 
     return False
+
+# PATCH: Erweiterte OCR-Funktion mit Bounding-Box Filter und Pre-Click Validation
+async def find_button_with_ocr_enhanced(button_texts: list[str], region: list[int] = None) -> bool:
+    """
+    Erweiterte OCR-basierte Button-Suche mit Modal-Bounds und Pre-Click Validation.
+    """
+    try:
+        log.info(f"🔍 [OCR_ENHANCED] Searching for buttons: {button_texts}")
+        
+        # Screenshot machen
+        screenshot_result = await mcp_client.send_command("Screenshot-Tool", {"region": region} if region else {})
+        
+        if not screenshot_result or not hasattr(screenshot_result, 'content') or not screenshot_result.content:
+            log.error("❌ [OCR_ENHANCED] Failed to capture screenshot")
+            return False
+            
+        screenshot_data = screenshot_result.content[0].text
+        if "Base64 data: " not in screenshot_data:
+            log.error("❌ [OCR_ENHANCED] Could not extract base64 data from screenshot")
+            return False
+            
+        base64_data = screenshot_data.split("Base64 data: ")[1]
+        
+        # PATCH: Screenshot-Dimensionen für Bounding-Box Filter
+        iw = ih = None
+        try:
+            import base64, cv2, numpy as np
+            img_bytes = base64.b64decode(base64_data)
+            img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
+            img = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+            ih, iw = (img.shape[0], img.shape[1]) if img is not None else (None, None)
+        except Exception:
+            pass
+        
+        # OCR durchführen
+        ocr_result = ocr_service.extract_text_from_base64(base64_data)
+        if not ocr_result or not ocr_result.get("words"):
+            log.warning("⚠️ [OCR_ENHANCED] No text detected by OCR")
+            return False
+        
+        # PATCH: Erweiterte Wort-basierte Suche mit Bounding-Box Filter
+        words = ocr_result.get("words", [])
+        if not words:
+            log.warning("⚠️ [OCR_ENHANCED] No words found in OCR result")
+            return False
+            
+        for i, word_info in enumerate(words):
+            try:
+                word_text = word_info.get("text", "").strip()
+                if not word_text:
+                    continue
+                    
+                word_normalized = normalize_facebook_text(word_text)
+                
+                for button_text in button_texts:
+                    button_normalized = normalize_facebook_text(button_text)
+                    
+                    if button_normalized and button_normalized in word_normalized:
+                        bbox = word_info.get("bbox", [])
+                        if len(bbox) >= 4:
+                            x = int((bbox[0] + bbox[2]) / 2)  # Mitte der Bounding Box
+                            y = int((bbox[1] + bbox[3]) / 2)
+                        else:
+                            log.warning(f"[OCR_ENHANCED] Invalid bbox for word '{word_text}': {bbox}")
+                            continue
+                        
+                        # PATCH: Bounding-Box Filter
+                        if not is_within_modal_bounds(x, y, iw, ih):
+                            log.warning(f"[FILTER_LOG] OCR match '{button_text}' at ({x}, {y}) outside modal bounds - skipping")
+                            continue
+                        
+                        # PATCH: Re-enable Pre-Click Validation - prevents false-positive clicks
+                        if not await pre_click_validate(x, y, button_text):
+                            log.warning(f"[SKIP_LOG] OCR pre-click validation failed for '{button_text}' at ({x}, {y}) - preventing false click")
+                            continue
+                        
+                        log.info(f"✅ [OCR_ENHANCED] Found '{button_text}' at ({x}, {y}). Clicking it.")
+                        await mcp_client.send_command("Click-Tool", {"loc": [x, y]})
+                        
+                        global last_focus_point
+                        last_focus_point = [x, y]
+                        return True
+                        
+            except Exception as word_e:
+                log.warning(f"[OCR_ENHANCED] Error processing word {i}: {word_e}")
+                continue
+        
+        return False
+        
+    except Exception as e:
+        log.error(f"❌ [OCR_ENHANCED] Exception: {e}")
+        return False
+
+# PATCH: Erweiterte Template-Matching-Funktion mit Bounding-Box Filter und Pre-Click Validation
+async def find_button_with_template_matching_enhanced(button_types: list[str]) -> bool:
+    """
+    Erweiterte Template-Matching-basierte Button-Suche mit Modal-Bounds und Pre-Click Validation.
+    """
+    try:
+        log.info(f"🔍 [TEMPLATE_ENHANCED] Searching for buttons: {button_types}")
+        
+        # Screenshot machen
+        screenshot_result = await mcp_client.send_command("Screenshot-Tool", {})
+        
+        if not screenshot_result or not hasattr(screenshot_result, 'content') or not screenshot_result.content:
+            log.error("❌ [TEMPLATE_ENHANCED] Failed to capture screenshot")
+            return False
+            
+        screenshot_data = screenshot_result.content[0].text
+        if "Base64 data: " not in screenshot_data:
+            log.error("❌ [TEMPLATE_ENHANCED] Could not extract base64 data from screenshot")
+            return False
+            
+        base64_data = screenshot_data.split("Base64 data: ")[1]
+        
+        # PATCH: Screenshot-Dimensionen für Bounding-Box Filter
+        iw = ih = None
+        try:
+            import base64, cv2, numpy as np
+            img_bytes = base64.b64decode(base64_data)
+            img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
+            img = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+            ih, iw = (img.shape[0], img.shape[1]) if img is not None else (None, None)
+        except Exception:
+            pass
+        
+        # Template Matching für jeden Button-Typ
+        for button_type in button_types:
+            template_name = _map_button_to_template(button_type)
+            if not template_name:
+                continue
+                
+            # PATCH: Conservative threshold to avoid false-positives that click on profiles
+            detection_threshold = 0.65 if template_name == "Antwort-ansehen" else 0.6  # Higher to reduce false-positives
+            matches = template_service.match_template_in_base64(
+                base64_data, 
+                template_name, 
+                threshold=detection_threshold
+            )
+            
+            if matches:
+                # Verwende das beste Match
+                best_match = max(matches, key=lambda m: m.confidence)
+                # PATCH: Convert numpy types to native Python int to avoid serialization errors
+                x, y = int(best_match.center[0]), int(best_match.center[1])
+                confidence = best_match.confidence
+                
+                # PATCH: Bounding-Box Filter
+                if not is_within_modal_bounds(x, y, iw, ih):
+                    log.warning(f"[FILTER_LOG] Template match '{button_type}' at ({x}, {y}) outside modal bounds - skipping")
+                    continue
+                
+                # PATCH: Re-enable Pre-Click Validation - prevents false-positive clicks on profiles
+                if not await pre_click_validate(x, y, button_type):
+                    log.warning(f"[SKIP_LOG] Template pre-click validation failed for '{button_type}' at ({x}, {y}) - preventing profile click")
+                    continue
+                
+                log.info(f"✅ [TEMPLATE_ENHANCED] Found '{button_type}' at ({x}, {y}) [confidence: {confidence:.2f}]. Clicking it.")
+                await mcp_client.send_command("Click-Tool", {"loc": [x, y]})
+                
+                global last_focus_point
+                last_focus_point = [x, y]
+                return True
+        
+        return False
+        
+    except Exception as e:
+        log.error(f"❌ [TEMPLATE_ENHANCED] Exception: {e}")
+        return False
 
 async def execute_facebook_workflow(original_url: str = ""):
     """
@@ -607,13 +836,30 @@ async def execute_facebook_workflow(original_url: str = ""):
         await simulate_brief_reading()
         
         # Schritt 4: Neue Strategie - Screenshot + OCR basiertes Kommentar-Scraping mit progressivem Scrollen
-        log.info("4️⃣ Starting progressive screenshot-based comment extraction...")
+        # === Schritt 4: SET ALLE KOMMENTARE ANCHOR ===
+        log.info("4️⃣ Setting 'Alle Kommentare' anchor point...")
+        anchor_screenshot = await mcp_client.send_command("Screenshot-Tool", {})
+        anchor_data = None
+        if anchor_screenshot and hasattr(anchor_screenshot, 'content') and anchor_screenshot.content:
+            anchor_data = anchor_screenshot.content[0].text
+            log.info("📍 'Alle Kommentare' anchor screenshot captured")
+        
+        # === Schritt 5: PRELOAD ALL COMMENTS ===
+        log.info("5️⃣ Starting aggressive pre-scroll to load all Facebook comments...")
+        await preload_all_facebook_comments()
+        
+        # === Schritt 6: RETURN TO ALLE KOMMENTARE ANCHOR ===
+        log.info("6️⃣ Returning to 'Alle Kommentare' anchor point...")
+        await return_to_alle_kommentare_anchor()
+        
+        # === Schritt 7: COMMENT EXTRACTION ===
+        log.info("7️⃣ Starting progressive screenshot-based comment extraction...")
         
         # Store the original URL for validation purposes
         find_and_click_expansion_buttons._original_url = original_url
         
-        extracted_comments = await extract_comments_via_screenshots()
-        log.info(f"📊 Extracted {len(extracted_comments)} comments via screenshot analysis")
+        extracted_comments = await extract_comments_adaptive()
+        log.info(f"📊 Extracted {len(extracted_comments)} comments via adaptive analysis")
         
         # Speichere die extrahierten Kommentare für das finale DOM
         global extracted_comment_data
@@ -1002,6 +1248,118 @@ def clamp_to_modal(x: int, y: int, *, image_width: int | None = None, image_heig
     if clamped_x != x or clamped_y != y:
         log.info(f"[MODAL_CLAMP] Adjusted position from ({x}, {y}) to ({clamped_x}, {clamped_y}) within bounds L{left}-R{right} T{top}-B{bottom}")
     return clamped_x, clamped_y
+
+# PATCH: Bounding-Box Filter Hilfsfunktion
+def is_within_modal_bounds(x: int, y: int, width: int | None = None, height: int | None = None) -> bool:
+    """
+    Prüft ob Koordinaten innerhalb des erlaubten Facebook-Post-Modal-Fensters liegen.
+    
+    Args:
+        x, y: Koordinaten zum Prüfen
+        width, height: Screenshot-Dimensionen (optional)
+        
+    Returns:
+        True wenn Koordinaten innerhalb der Bounding-Box liegen
+    """
+    # PATCH: Definiere Bounding-Box-Fenster für erlaubte Klickbereiche
+    if width and height and width > 0 and height > 0:
+        # Prozentuale Bounds basierend auf Screenshot-Größe
+        min_x = int(width * 0.2)   # 20% von links
+        max_x = int(width * 0.8)   # 80% von links  
+        min_y = int(height * 0.15) # 15% von oben
+        max_y = int(height * 0.88) # 88% von oben
+    else:
+        # Absolute Fallback-Werte
+        min_x, max_x, min_y, max_y = 300, 1200, 200, 700
+    
+    is_within = min_x <= x <= max_x and min_y <= y <= max_y
+    
+    if not is_within:
+        log.debug(f"[FILTER_LOG] Coordinates ({x}, {y}) outside bounds: x∈[{min_x},{max_x}], y∈[{min_y},{max_y}]")
+    
+    return is_within
+
+# PATCH: Pre-Click Validation Hilfsfunktion  
+async def pre_click_validate(x: int, y: int, expected_text: str) -> bool:
+    """
+    Validiert vor dem Klick, ob an der Zielkoordinate der erwartete Button-Text vorhanden ist.
+    
+    Args:
+        x, y: Zielkoordinaten für den Klick
+        expected_text: Erwarteter Button-Text ("Antwort", "Kommentare", etc.)
+        
+    Returns:
+        True wenn Validierung erfolgreich, False sonst
+    """
+    try:
+        # PATCH: Erstelle Crop-Screenshot von ca. 80x30 Pixeln um die Zielkoordinate
+        crop_width, crop_height = 80, 30
+        # PATCH: Convert numpy types to native Python int to avoid serialization errors
+        crop_x = max(0, int(x) - crop_width // 2)
+        crop_y = max(0, int(y) - crop_height // 2)
+        
+        # Screenshot mit Region erstellen
+        screenshot_result = await mcp_client.send_command("Screenshot-Tool", {
+            "region": [crop_x, crop_y, crop_width, crop_height]
+        })
+        
+        if not screenshot_result or not hasattr(screenshot_result, 'content') or not screenshot_result.content:
+            log.warning(f"[SKIP_LOG] Pre-click validation: Could not capture crop screenshot at ({x}, {y})")
+            return False
+            
+        screenshot_data = screenshot_result.content[0].text
+        if "Base64 data: " not in screenshot_data:
+            log.warning(f"[SKIP_LOG] Pre-click validation: Invalid screenshot data format")
+            return False
+            
+        base64_data = screenshot_data.split("Base64 data: ")[1]
+        
+        # PATCH: Template-Matching Validation
+        normalized_expected = normalize_facebook_text(expected_text)
+        
+        # PATCH: Stricter template matching for validation to prevent false-positives
+        template_name = _map_button_to_template(expected_text)
+        if template_name:
+            matches = template_service.match_template_in_base64(
+                base64_data, 
+                template_name, 
+                threshold=0.7  # Higher threshold for validation - must be very confident
+            )
+            if matches:
+                log.debug(f"[VALIDATION] Strong template match found for '{expected_text}' at crop region (threshold 0.7)")
+                return True
+        
+        # PATCH: OCR Substring-Check als Fallback
+        ocr_result = ocr_service.extract_text_from_base64(base64_data)
+        if ocr_result and ocr_result.get("text"):
+            detected_text = normalize_facebook_text(ocr_result["text"])
+            
+            # Überprüfe ob erwarteter Text im OCR-Text enthalten ist
+            if normalized_expected and normalized_expected in detected_text:
+                log.debug(f"[VALIDATION] OCR substring match for '{expected_text}' in '{detected_text}'")
+                return True
+            
+            # Zusätzliche Fuzzy-Checks für häufige Varianten
+            fuzzy_checks = {
+                "antwort": ["antwort", "reply", "answer"],
+                "kommentar": ["kommentar", "comment", "view"],
+                "alle": ["alle", "all", "view"],
+                "ansehen": ["ansehen", "view", "see"]
+            }
+            
+            for key, variants in fuzzy_checks.items():
+                if key in normalized_expected.lower():
+                    for variant in variants:
+                        if variant in detected_text.lower():
+                            log.debug(f"[VALIDATION] Fuzzy match '{variant}' for '{expected_text}'")
+                            return True
+        
+        log.warning(f"[SKIP_LOG] Pre-click validation failed: Expected '{expected_text}', found '{detected_text if 'detected_text' in locals() else 'N/A'}'")
+        return False
+        
+    except Exception as e:
+        log.error(f"[SKIP_LOG] Pre-click validation exception: {e}")
+        return False
 
 async def dodge_cursor_then_center(from_x: int, from_y: int):
     """Quick dodge out of hover popups: move to opposite modal corner, then center-safe."""
@@ -1493,33 +1851,272 @@ async def final_cleanup_pass() -> bool:
         log.error(f"❌ Error during final cleanup pass: {e}")
         return False
 
-async def extract_comments_via_screenshots() -> list[dict]:
+async def preload_all_facebook_comments():
     """
-    Hybrid approach: Screenshot + OCR + Template Matching for comment expansion.
-    Progressive scroll strategy: look for expansion buttons, scroll when none found.
+    PATCH: Aggressive pre-scrolling strategy to load ALL Facebook comments.
+    Facebook lazy-loads comments as the user scrolls, so we need to scroll
+    completely to the end to ensure all comments are loaded before extraction.
+    """
+    log.info("📜 Starting aggressive pre-scroll to load all Facebook comments...")
+    
+    try:
+        # Start from the top
+        await mcp_client.send_command("Scroll-Tool", {"direction": "up", "wheel_times": 10})
+        await asyncio.sleep(2.0)
+        
+        # PATCH: Only screenshot-based end detection - no artificial maximum
+        scroll_attempts = 0
+        consecutive_unchanged_screens = 0
+        max_unchanged_screens = 5  # PATCH: Reduced from 10 to 5 for faster detection and resource savings
+        last_screenshot_hash = None
+        
+        # PATCH: Screenshot-based end detection with safety limit for extreme cases
+        safety_limit = 500  # Safety limit to prevent truly infinite loops (extremely rare)
+        while consecutive_unchanged_screens < max_unchanged_screens and scroll_attempts < safety_limit:
+            scroll_attempts += 1
+            
+            # Take a screenshot to check current content
+            screenshot_result = await mcp_client.send_command("Screenshot-Tool", {})
+            if screenshot_result and hasattr(screenshot_result, 'content') and screenshot_result.content:
+                screenshot_data = screenshot_result.content[0].text
+                if "Base64 data: " in screenshot_data:
+                    # PATCH: Screenshot-based end detection - hash the full screenshot
+                    import hashlib
+                    current_screenshot_hash = hashlib.md5(screenshot_data.encode()).hexdigest()
+                    
+                    if current_screenshot_hash == last_screenshot_hash:
+                        consecutive_unchanged_screens += 1
+                        log.debug(f"[PRELOAD] Unchanged screen detected {consecutive_unchanged_screens}/{max_unchanged_screens} times")
+                        
+                        # Stop after max_unchanged_screens consecutive identical screenshots
+                        if consecutive_unchanged_screens >= max_unchanged_screens:
+                            log.info(f"🏁 [PRELOAD] Reached end after {scroll_attempts} scroll attempts ({max_unchanged_screens} unchanged screens)")
+                            break
+                    else:
+                        consecutive_unchanged_screens = 0  # Reset counter when screen changes
+                        last_screenshot_hash = current_screenshot_hash
+                        log.debug(f"[PRELOAD] Screen changed, reset unchanged counter")
+            
+            # PATCH: Text-based end detection completely removed - using screenshot comparison only
+            
+            # PATCH: Consistent scroll distance - no need to reduce near "end" since we don't know the end
+            scroll_distance = 5  # Consistent aggressive scrolling
+            await mcp_client.send_command("Scroll-Tool", {"direction": "down", "wheel_times": scroll_distance})
+            
+            # Shorter wait time for faster loading, but still allow content to load
+            await asyncio.sleep(1.5)
+            
+            # PATCH: Progress logging without artificial maximum
+            if scroll_attempts % 10 == 0:
+                log.info(f"📜 [PRELOAD] Scroll progress: {scroll_attempts} attempts (unchanged screens: {consecutive_unchanged_screens}/5)")
+        
+        # PATCH: Different completion messages based on how the loop ended
+        if consecutive_unchanged_screens >= max_unchanged_screens:
+            log.info(f"📜 [PRELOAD] Completed pre-scroll after {scroll_attempts} attempts (reached end via screenshot detection)")
+        else:
+            log.warning(f"📜 [PRELOAD] Pre-scroll stopped at safety limit ({safety_limit} attempts) - may not have reached true end")
+        log.info("📜 [PRELOAD] Pre-scroll complete - will return to anchor via template matching")
+        
+    except Exception as e:
+        log.error(f"❌ [PRELOAD] Error during pre-scroll: {e}")
+        # Continue anyway - extraction might still work with partial content
+
+async def return_to_alle_kommentare_anchor():
+    """
+    Returns to the 'Alle Kommentare' anchor point using template matching.
+    Uses the 'alle-kommentare-confirmed.png' template to find the anchor.
+    """
+    log.info("📍 Searching for 'Alle Kommentare' anchor...")
+    
+    # PATCH: Screenshot-based top detection - same logic as end detection but upward
+    scroll_attempts = 0
+    consecutive_unchanged_screens = 0
+    max_unchanged_screens = 5  # Stop after 5 consecutive unchanged screenshots (page top reached)
+    last_screenshot_hash = None
+    safety_limit = 200  # Ultimate safety for extreme cases
+    
+    try:
+        # PATCH: Only stop when anchor is found OR page top reached (screenshot-based)
+        while consecutive_unchanged_screens < max_unchanged_screens and scroll_attempts < safety_limit:
+            scroll_attempts += 1
+            
+            # Take screenshot and look for anchor
+            screenshot_result = await mcp_client.send_command("Screenshot-Tool", {})
+            if not screenshot_result or not hasattr(screenshot_result, 'content') or not screenshot_result.content:
+                log.warning(f"[ANCHOR] Failed to capture screenshot on attempt {scroll_attempts}")
+                await asyncio.sleep(1.0)
+                continue
+                
+            screenshot_data = screenshot_result.content[0].text
+            if "Base64 data: " not in screenshot_data:
+                continue
+                
+            base64_data = screenshot_data.split("Base64 data: ")[1]
+            
+            # PATCH: Screenshot-based top detection - check if content stopped changing
+            current_screenshot_hash = hash(base64_data[:1000])  # Hash first 1000 chars for speed
+            if last_screenshot_hash and current_screenshot_hash == last_screenshot_hash:
+                consecutive_unchanged_screens += 1
+                log.debug(f"[ANCHOR] Screen unchanged (consecutive: {consecutive_unchanged_screens}/{max_unchanged_screens})")
+                if consecutive_unchanged_screens >= max_unchanged_screens:
+                    log.info(f"📍 [ANCHOR] Reached page top after {scroll_attempts} attempts (screenshot-based detection)")
+                    break
+            else:
+                if last_screenshot_hash:  # Only reset if we had a previous hash
+                    consecutive_unchanged_screens = 0
+                    log.debug(f"[ANCHOR] Screen changed, reset unchanged counter")
+                last_screenshot_hash = current_screenshot_hash
+            
+            # PATCH: Stricter threshold for anchor detection to prevent false positives
+            matches = template_service.match_template_in_base64(
+                base64_data,
+                "alle-kommentare-confirmed",
+                threshold=0.75  # Higher threshold for more reliable anchor detection
+            )
+            
+            if matches:
+                # PATCH: Double validation to prevent false positives
+                best_match = matches[0]
+                confidence = best_match.confidence
+                log.info(f"🎯 [ANCHOR] Potential anchor found with confidence {confidence:.3f} after {scroll_attempts} attempts")
+                
+                # Require high confidence for anchor detection
+                if confidence >= 0.8:
+                    log.info(f"✅ [ANCHOR] High confidence match - accepting as anchor")
+                    
+                    # Small adjustment scroll to center the anchor nicely
+                    await mcp_client.send_command("Scroll-Tool", {"direction": "down", "wheel_times": 2})
+                    await asyncio.sleep(1.0)
+                    
+                    log.info("📍 [ANCHOR] Successfully returned to 'Alle Kommentare' position")
+                    return True
+                else:
+                    log.warning(f"⚠️ [ANCHOR] Low confidence {confidence:.3f} - continuing search for better match")
+            
+            # PATCH: Larger scroll distance to cover ground faster - was 3, now 8
+            await mcp_client.send_command("Scroll-Tool", {"direction": "up", "wheel_times": 8})
+            await asyncio.sleep(1.0)
+            
+            # PATCH: Progress logging with screenshot-based approach
+            if scroll_attempts % 10 == 0:
+                log.info(f"📍 [ANCHOR] Search progress: {scroll_attempts} attempts (unchanged screens: {consecutive_unchanged_screens}/{max_unchanged_screens})")
+        
+        # PATCH: Different end messages based on why the loop ended
+        if consecutive_unchanged_screens >= max_unchanged_screens:
+            log.warning(f"⚠️ [ANCHOR] Reached page top after {scroll_attempts} attempts - anchor not found in visible area")
+            log.info("📍 [ANCHOR] Starting extraction from current position (likely near page top)")
+        else:
+            log.error(f"❌ [ANCHOR] Anchor search stopped at safety limit ({safety_limit} attempts)")
+            log.error("❌ [ANCHOR] Continuing anyway - extraction may start from wrong position")
+        return False
+        
+    except Exception as e:
+        log.error(f"❌ [ANCHOR] Error during anchor search: {e}")
+        return False
+
+async def extract_comments_adaptive() -> list[dict]:
+    """
+    PATCH: Adaptive extraction strategy - Screenshot->Check->Click->Scroll dynamically.
+    No more fixed cycles - adapts to post length and button availability.
     """
     extracted_comments = []
-    max_cycles = 25  # Handle longer comment threads - increased persistence
-    cycle_count = 0
-    consecutive_no_buttons = 0
+    no_buttons_cycles = 0
+    max_no_button_cycles = 5  # Stop after 5 consecutive cycles without buttons
+    total_buttons_clicked = 0
+    position_counter = 0
     seen_content = set()  # Avoid duplicate content
     
-    log.info("📸 Starting progressive screenshot + template matching comment extraction...")
+    log.info("📸 [ADAPTIVE] Starting dynamic extraction strategy...")
+    
+    try:
+        await asyncio.sleep(2.0)  # Initial pause
+        
+        while no_buttons_cycles < max_no_button_cycles:
+            position_counter += 1
+            log.info(f"🔄 [ADAPTIVE] Position {position_counter} (no-button cycles: {no_buttons_cycles}/{max_no_button_cycles})")
+            
+            # STEP 1: Extract comments from current position
+            current_comments = await extract_visible_comments_ocr(seen_content)
+            log.info(f"📝 [ADAPTIVE] Extracted {len(current_comments)} comments from position {position_counter}")
+            
+            # Add comments to main list (duplicates already filtered by extract_visible_comments_ocr)
+            extracted_comments.extend(current_comments)
+            
+            # STEP 2: Look for expansion buttons in current view
+            buttons_found = await find_and_click_expansion_buttons()
+            
+            if buttons_found:
+                log.info(f"✅ [ADAPTIVE] Found and clicked expansion buttons at position {position_counter}")
+                total_buttons_clicked += 1
+                no_buttons_cycles = 0  # Reset counter - we found buttons!
+                
+                # Wait for content to load after clicking
+                await asyncio.sleep(3.0)
+                
+                # Extract comments from expanded view
+                expanded_comments = await extract_visible_comments_ocr(seen_content)
+                log.info(f"📝 [ADAPTIVE] Extracted {len(expanded_comments)} comments from expanded view")
+                
+                # Add expanded comments to main list (duplicates already filtered)
+                extracted_comments.extend(expanded_comments)
+                
+                # Continue from this position - don't scroll yet, check for more buttons first
+                continue
+                
+            else:
+                log.info(f"❌ [ADAPTIVE] No expansion buttons found at position {position_counter}")
+                no_buttons_cycles += 1
+                
+                # STEP 3: Scroll down one step and continue searching
+                log.info(f"📜 [ADAPTIVE] Scrolling down 1 step to search for more buttons...")
+                await mcp_client.send_command("Scroll-Tool", {"direction": "down", "wheel_times": 1})
+                await asyncio.sleep(1.5)  # Shorter wait for single scroll
+            
+            # Safety: URL validation every 10 positions
+            if position_counter % 10 == 0:
+                try:
+                    original_url = getattr(find_and_click_expansion_buttons, '_original_url', "")
+                    url_validation_result = await validate_scan_url(original_url)
+                    if not url_validation_result:
+                        log.error("🚨 [ADAPTIVE] URL validation failed - stopping extraction")
+                        break
+                except Exception as e:
+                    log.warning(f"⚠️ [ADAPTIVE] URL validation error: {e}")
+        
+        log.info(f"🏁 [ADAPTIVE] Extraction completed: {total_buttons_clicked} buttons clicked, {len(extracted_comments)} comments extracted")
+        return extracted_comments
+        
+    except Exception as e:
+        log.error(f"❌ [ADAPTIVE] Extraction failed: {e}")
+        return extracted_comments
+
+async def extract_comments_via_screenshots() -> list[dict]:
+    """
+    PATCH: Adaptive approach - Screenshot->Check->Click->Scroll dynamically.
+    No more fixed cycles - adapts to post length and button availability.
+    """
+    extracted_comments = []
+    no_buttons_cycles = 0
+    max_no_button_cycles = 5  # Stop after 5 consecutive cycles without buttons
+    total_buttons_clicked = 0
+    seen_content = set()  # Avoid duplicate content
+    
+    log.info("📸 Starting adaptive screenshot + template matching comment extraction...")
     
     try:
         # Initial pause to let page content fully load
         await asyncio.sleep(2.0)  # Extra time for dynamic content to load
         
-        # Start from top of comments section
-        await mcp_client.send_command("Scroll-Tool", {"direction": "up", "wheel_times": 5})
-        await asyncio.sleep(2.0)  # Longer wait for scroll to complete and content to stabilize
+        # PATCH: Adaptive extraction - no more from top, start from anchor position
+        position_counter = 0
         
-        while cycle_count < max_cycles:
-            log.info(f"🔄 Extraction cycle {cycle_count + 1}/{max_cycles}")
+        while no_buttons_cycles < max_no_button_cycles:
+            position_counter += 1
+            log.info(f"🔄 [ADAPTIVE] Extraction position {position_counter} (no-button cycles: {no_buttons_cycles}/{max_no_button_cycles})")
             
-            # PERIODIC URL VALIDATION: Check every 3 cycles
-            if cycle_count > 0 and cycle_count % 3 == 0:
-                log.info(f"🔍 Periodic URL validation (cycle {cycle_count + 1})")
+            # PERIODIC URL VALIDATION: Check every 10 positions
+            if position_counter > 0 and position_counter % 10 == 0:
+                log.info(f"🔍 Periodic URL validation (position {position_counter})")
                 try:
                     original_url = getattr(find_and_click_expansion_buttons, '_original_url', "")
                     url_validation_result = await validate_scan_url(original_url)
@@ -1529,12 +2126,13 @@ async def extract_comments_via_screenshots() -> list[dict]:
                 except Exception as e:
                     log.warning(f"⚠️ Periodic URL validation failed: {e}")
             
-            # SAFETY: Dodge then center at start of each cycle to dismiss any persistent popups
-            try:
-                await dodge_cursor_then_center(600, 400)
-                log.debug("🛡️ SAFETY: Dodge+Center at cycle start")
-            except Exception as e:
-                log.warning(f"⚠️ Could not perform dodge at cycle start: {e}")
+            # SAFETY: Dodge then center occasionally to dismiss any persistent popups
+            if position_counter % 5 == 0:  # Every 5 positions
+                try:
+                    await dodge_cursor_then_center(600, 400)
+                    log.debug("🛡️ SAFETY: Dodge+Center at position start")
+                except Exception as e:
+                    log.warning(f"⚠️ Could not perform dodge at position start: {e}")
             
             # Phase 1: Extract visible comments via screenshots + OCR
             cycle_comments = await extract_visible_comments_ocr(seen_content)
@@ -1547,7 +2145,22 @@ async def extract_comments_via_screenshots() -> list[dict]:
                 log.error(f"🛑 ABORTING EXTRACTION: {fatal}")
                 break
             
-            if not expansion_clicked:
+            # FIX 3: Handle the new return values including fallback scroll trigger
+            if expansion_clicked == "NEED_SCROLL":
+                # Found buttons but all were unsafe (avatar conflicts) - trigger fallback scroll
+                log.info("🔄 FALLBACK SCROLL: All expansion buttons were unsafe, attempting scroll to find better positions")
+                try:
+                    expansion_clicked_after_scroll = await intelligent_scroll_and_search()
+                except AbortExtractionError as fatal:
+                    log.error(f"🛑 ABORTING EXTRACTION during fallback scroll: {fatal}")
+                    break
+                
+                if expansion_clicked_after_scroll:
+                    log.info("✅ Fallback scroll found safer expansion buttons")
+                else:
+                    no_progress_cycles += 1
+                    log.info(f"⚠️ Fallback scroll completed but no buttons clicked (no_progress: {no_progress_cycles})")
+            elif not expansion_clicked:
                 # No expansion buttons found - use intelligent scrolling to find more
                 try:
                     expansion_clicked_after_scroll = await intelligent_scroll_and_search()
@@ -1808,6 +2421,7 @@ async def find_and_click_expansion_buttons() -> bool:
         # Look for all types of expansion buttons
         expansion_templates = ["alle-xx-kommentare-ansehen", "Antwort-ansehen"]
         buttons_clicked = 0
+        total_matches_found = 0  # Track total template matches for fallback logic
         
         # PATCH: Deduping seen boxes (avoid re-clicking same button)
         seen_boxes: set[tuple[int, int]] = set()
@@ -1815,7 +2429,7 @@ async def find_and_click_expansion_buttons() -> bool:
         for template_name in expansion_templates:
             # Take screenshot for template matching
             screenshot_result = await mcp_client.send_command("Screenshot-Tool", {})
-        
+            
             # Extract base64 data from Screenshot-Tool response
             screenshot_data = None
             if screenshot_result and hasattr(screenshot_result, 'content') and screenshot_result.content:
@@ -1829,9 +2443,12 @@ async def find_and_click_expansion_buttons() -> bool:
             
             # Find template matches
             from .template_service import template_service
-            matches = template_service.match_template_in_base64(screenshot_data, template_name, threshold=0.55)  # More sensitive detection
+            # PATCH: Conservative threshold to prevent false-positives on profiles
+            detection_threshold = 0.65 if template_name == "Antwort-ansehen" else 0.6  # Higher to reduce false-positives
+            matches = template_service.match_template_in_base64(screenshot_data, template_name, threshold=detection_threshold)
             
             if matches:
+                total_matches_found += len(matches)  # Track total matches for fallback logic
                 log.info(f"🎯 Found {len(matches)} '{template_name}' buttons")
                 
                 # CRITICAL: Sort matches by Y coordinate (top to bottom) to prevent hover popups blocking lower buttons
@@ -1912,55 +2529,99 @@ async def find_and_click_expansion_buttons() -> bool:
                     # Apply ULTRA-CONSERVATIVE click positioning to avoid usernames
                     original_x, original_y = x, y
                     if template_name in ("Antwort-ansehen",):
-                        # Conservative offset to avoid usernames for reply links only
-                        left_offset = int(min(max(w * 0.15, 10), 30))
+                        # PATCH: Increase offset to avoid usernames for reply links - was too conservative
+                        left_offset = int(min(max(w * 0.4, 20), 80))  # Increased from 0.15 to 0.4
                         x = x - left_offset
-                        log.info(f"🔧 DIAGNOSTIC: Applied left_offset={left_offset}px (Antwort-ansehen), moved from ({original_x}, {original_y}) to ({x}, {y})")
+                        log.info(f"🔧 FIXED: Applied larger left_offset={left_offset}px (Antwort-ansehen), moved from ({original_x}, {original_y}) to ({x}, {y})")
                         
                         # Re-validate after offset - if now outside bounds, skip this button
                         if not (modal_left <= x <= modal_right and modal_top <= y <= modal_bottom):
                             log.warning(f"⚠️ SKIPPING: After offset, click position ({x}, {y}) is outside modal bounds")
                             continue
                     else:
-                        # For 'alle-xx-kommentare-ansehen' click center of template box
-                        x, y = int(match.center[0]), int(match.center[1])
-                        log.info(f"🔧 DIAGNOSTIC: Using template-centered click for '{template_name}' at ({x}, {y})")
+                        # FIX 1: Horizontal bias for 'alle-xx-kommentare-ansehen' to avoid avatars
+                        # Click 60% from left edge (40% from right) to avoid usernames/avatars on the left
+                        # PATCH: Fix MatchResult attribute access - use .location instead of .left
+                        x = int(match.location[0] + w * 0.6)  # Biased towards right side of button
+                        y = int(match.center[1])
+                        log.info(f"🔧 FIXED: Using right-biased click for '{template_name}' at ({x}, {y}) [60% from left edge]")
                         
-                        # STRICTER boundary check - ensure we don't go too far left
-                        if x < 300:  # Increased safety margin from left edge where usernames typically are
-                            x = x + left_offset + 50  # Revert offset and add extra safety margin
-                            log.warning(f"⚠️ DIAGNOSTIC: Too close to left edge! Moved from left-offset position to safer: ({x}, {y})")
+                        # Enhanced left edge safety with higher threshold for modal-aware positioning
+                        modal_safety_margin = modal_left + 200 if 'modal_left' in locals() else 500
+                        if x < modal_safety_margin:
+                            # PATCH: Fix MatchResult attribute access - use .location instead of .left
+                            x = int(match.location[0] + w * 0.8)  # Move even further right
+                            log.warning(f"⚠️ ENHANCED SAFETY: Moved to 80% from left edge: ({x}, {y})")
                             
-                        # Additional safety: if still too close to left, move to right side of button
-                        if x < 250:
-                            x = int(match.center[0]) + int(w * 0.3)  # Move to right side of button
-                            log.warning(f"⚠️ DIAGNOSTIC: Still too close! Moved to RIGHT SIDE of button: ({x}, {y})")
+                        # Final fallback: if still too close, use right edge of button
+                        if x < modal_safety_margin:
+                            # PATCH: Fix MatchResult attribute access - calculate right edge from location + size
+                            x = int(match.location[0] + w - 20)  # 20px from right edge of button
+                            log.warning(f"⚠️ FINAL FALLBACK: Moved to right edge of button: ({x}, {y})")
                     
                     log.info(f"🖱️ FINAL CLICK POSITION: button {i+1} at ({x}, {y}) [moved {x-original_x}px from original]")
                     
-                    # SAFETY CHECK: Only abort if profile content is very close to click coordinates
+                    # FIX 2: Enhanced OCR safety check - scan 120x40px area around click target
                     try:
-                        # More precise profile detection - only check immediate click area (50x50 pixels)
-                        profile_words = ['freund/in hinzufügen', 'nachricht senden', 'freund/in hinzu', 'nachricht send']
                         screenshot_result = await mcp_client.send_command("Screenshot-Tool", {})
                         if screenshot_result and hasattr(screenshot_result, 'content') and screenshot_result.content:
                             content_text = screenshot_result.content[0].text if screenshot_result.content else ""
                             if "Base64 data: " in content_text:
                                 screenshot_data = content_text.split("Base64 data: ")[-1]
-                                from .ocr_service import ocr_service
-                                ocr_result = ocr_service.extract_text_from_base64(screenshot_data)
-                                ocr_text = ocr_result.get('text', '') if ocr_result else ''
                                 
-                                # Only abort if very specific profile button phrases are detected
-                                detected_profile_words = [word for word in profile_words if word in ocr_text.lower()]
-                                if detected_profile_words:
-                                    log.error(f"🚨 SAFETY ABORT: Detected profile button phrases near click position: {detected_profile_words}")
-                                    log.error(f"🚨 SKIPPING this expansion button to avoid profile click!")
-                                    continue  # Skip this button and move to next one
-                                else:
-                                    log.info(f"✅ SAFETY CHECK PASSED: No profile button phrases detected near click area")
+                                # Extract text in 120x40 area around click point for profile detection
+                                from .ocr_service import ocr_service
+                                import base64, cv2, numpy as np
+                                
+                                try:
+                                    img_bytes = base64.b64decode(screenshot_data)
+                                    img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
+                                    img = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+                                    
+                                    # Crop 120x40 area around click point
+                                    crop_x1 = max(0, x - 60)
+                                    crop_y1 = max(0, y - 20)
+                                    crop_x2 = min(img.shape[1], x + 60)
+                                    crop_y2 = min(img.shape[0], y + 20)
+                                    cropped_img = img[crop_y1:crop_y2, crop_x1:crop_x2]
+                                    
+                                    # Convert cropped area back to base64 for OCR
+                                    _, buffer = cv2.imencode('.png', cropped_img)
+                                    cropped_b64 = base64.b64encode(buffer).decode('utf-8')
+                                    
+                                    # OCR the cropped area only
+                                    crop_ocr_result = ocr_service.extract_text_from_base64(cropped_b64)
+                                    crop_text = _normalize(crop_ocr_result.get('text', '') if crop_ocr_result else '')
+                                    
+                                    # Enhanced profile detection keywords
+                                    profile_indicators = [
+                                        'freund', 'nachricht', 'senden', 'hinzufügen', 'friend', 'message',
+                                        'lagerarbeiter', 'kommissionierer', 'arbeiter', '@', '€', 'eur',
+                                        'follow', 'folgen', 'abonnieren', 'subscribe'
+                                    ]
+                                    
+                                    detected_indicators = [word for word in profile_indicators if word in crop_text]
+                                    if detected_indicators:
+                                        log.warning(f"🚨 OCR SAFETY: Profile indicators detected in click area: {detected_indicators}")
+                                        log.warning(f"🚨 Crop text: '{crop_text[:100]}...'")
+                                        log.warning(f"🚨 SKIPPING button {i+1} to avoid profile click!")
+                                        continue  # Skip this button entirely
+                                    else:
+                                        log.info(f"✅ OCR SAFETY: Click area clean, crop text: '{crop_text[:50]}...'")
+                                        
+                                except Exception as crop_error:
+                                    log.debug(f"Crop OCR failed, using full screenshot: {crop_error}")
+                                    # Fallback to full screenshot OCR with original logic
+                                    ocr_result = ocr_service.extract_text_from_base64(screenshot_data)
+                                    ocr_text = _normalize(ocr_result.get('text', '') if ocr_result else '')
+                                    profile_words = ['freund/in hinzufügen', 'nachricht senden', 'freund/in hinzu', 'nachricht send']
+                                    detected_profile_words = [word for word in profile_words if word in ocr_text]
+                                    if detected_profile_words:
+                                        log.warning(f"🚨 FALLBACK SAFETY: Profile phrases detected: {detected_profile_words}")
+                                        continue
+                                    
                     except Exception as safety_error:
-                        log.warning(f"⚠️ Safety check failed, proceeding with caution: {safety_error}")
+                        log.warning(f"⚠️ Enhanced safety check failed, proceeding with caution: {safety_error}")
                     
                     # IMMEDIATE safety - move to safe modal position before clicking
                     try:
@@ -2100,12 +2761,19 @@ async def find_and_click_expansion_buttons() -> bool:
                     # Extended pause between clicks for maximum safety
                     await asyncio.sleep(random.uniform(2.5, 4.0))
         
+        # FIX 3: Return different values to distinguish between success, no buttons, and need for fallback scroll
         if buttons_clicked > 0:
             log.info(f"✅ Successfully clicked {buttons_clicked} expansion buttons")
             return True
         else:
-            log.info("ℹ️ No expansion buttons found in current view")
-            return False
+            # Check if we found templates but skipped them all due to safety concerns
+            if total_matches_found > 0:
+                log.warning(f"⚠️ Found {total_matches_found} expansion button templates but skipped all due to safety concerns (likely avatar/profile conflicts)")
+                log.info("🔄 FALLBACK NEEDED: Recommending scroll to find safer button positions")
+                return "NEED_SCROLL"  # Special return value to trigger fallback scroll
+            else:
+                log.info("ℹ️ No expansion buttons found in current view")
+                return False
             
     except AbortExtractionError as fatal:
         log.error(f"🛑 FATAL: {fatal}")

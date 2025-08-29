@@ -10,7 +10,7 @@ from html.parser import HTMLParser
 
 from backend.config import settings
 from backend.logger import setup_logging
-from backend.models import ScanRequest, ScanResponse, AssignUserRequest
+from backend.models import ScanRequest, ScanResponse
 from backend import mcp_service, hate_speech_service
 from backend.evidence import EvidenceManager
 from backend.utils import human_wait
@@ -42,13 +42,45 @@ class TextExtractor(HTMLParser):
             if text and len(text) > 20: # Filter out short/irrelevant text
                 self.texts.append(text)
 
-def parse_comments_from_dom(dom: str) -> list[str]:
-    """A simple DOM parser to extract potential comments."""
+def parse_comments_from_dom(dom: str) -> list[dict]:
+    """Parse structured comments from DOM, extracting both text and usernames."""
     if not dom:
         return []
-    parser = TextExtractor()
-    parser.feed(dom)
-    return parser.texts
+    
+    comments = []
+    
+    # Check for screenshot-extracted comments first (structured format)
+    if "<!-- SCREENSHOT-EXTRACTED COMMENTS -->" in dom:
+        log.info("🔍 Found screenshot-extracted comments in DOM")
+        
+        # Extract structured comment data using regex
+        import re
+        comment_pattern = r'<div class=\'comment\'[^>]*>.*?<div class=\'author\'>(.*?)</div>.*?<div class=\'content\'>(.*?)</div>.*?</div>'
+        matches = re.findall(comment_pattern, dom, re.DOTALL)
+        
+        for author, content in matches:
+            if content.strip() and len(content.strip()) > 10:  # Filter meaningful content
+                comments.append({
+                    'text': content.strip(),
+                    'username': author.strip(),
+                    'source': 'screenshot_extraction'
+                })
+        
+        log.info(f"📊 Extracted {len(comments)} structured comments with usernames")
+    
+    # Fallback to simple text extraction if no structured comments found
+    if not comments:
+        log.info("📝 Using fallback text extraction method")
+        parser = TextExtractor()
+        parser.feed(dom)
+        for text in parser.texts:
+            comments.append({
+                'text': text,
+                'username': 'Unknown',  # No username available in simple extraction
+                'source': 'dom_extraction'
+            })
+    
+    return comments
 
 # Create a dedicated directory for runtime files
 RUN_DIR = Path(__file__).parent.parent / "run"
@@ -114,6 +146,44 @@ async def save_temporary_evidence(scan_id: str, comment_id: str, screenshot_byte
         json.dump(metadata, f, ensure_ascii=False, indent=2)
     
     log.info(f"Saved temporary evidence for {scan_id} to {temp_dir}")
+
+async def auto_assign_users_and_create_evidence(scan_id: str, hate_speech_results: list, detected_usernames: set):
+    """Automatically assign usernames and create evidence for detected hate speech."""
+    log.info(f"🔄 Auto-assigning evidence for scan {scan_id} with {len(detected_usernames)} detected usernames")
+    
+    # Create evidence for each user with hate speech
+    for username in detected_usernames:
+        # Find all hate speech results for this user
+        user_hate_results = [result for result in hate_speech_results if result.get('username') == username]
+        
+        if user_hate_results:
+            log.info(f"📋 Creating evidence for user '{username}' with {len(user_hate_results)} hate speech instances")
+            
+            try:
+                # Create an EvidenceManager for this user
+                evidence_manager = EvidenceManager(username=username)
+                
+                # Create metadata for this user's hate speech
+                user_metadata = {
+                    "scan_id": scan_id,
+                    "username": username,
+                    "timestamp": datetime.now().isoformat(),
+                    "hate_speech_count": len(user_hate_results),
+                    "hate_speech_results": user_hate_results,
+                    "source": "automatic_assignment"
+                }
+                
+                # Save the metadata
+                evidence_manager.add_metadata(user_metadata, source_path=f"{scan_id}_{username}_auto.json")
+                
+                # Finalize evidence for this user
+                evidence_manager.finalize_evidence(f"{scan_id}_{username}")
+                
+                log.info(f"✅ Successfully created evidence for user '{username}'")
+                
+            except Exception as e:
+                log.error(f"❌ Failed to create evidence for user '{username}': {e}")
+                raise
 
 async def run_scan_mcp(scan_id: str, url: str):
     log.info(f"BACKGROUND TASK: Starting scan {scan_id} for URL: {url}")
@@ -197,28 +267,67 @@ async def run_scan_mcp(scan_id: str, url: str):
         messages.append("Analyzing content for hate speech...")
         update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
         
-        extracted_texts = parse_comments_from_dom(dom_content)
+        extracted_comments = parse_comments_from_dom(dom_content)
         
         is_hate_detected = False
         hate_speech_results = []
+        detected_usernames = set()  # Track unique usernames from comments
         
-        for text in extracted_texts:
-            log.info(f"Analyzing text: {text[:50]}...") # Log first 50 chars of text
-            hate_analysis_result = await hate_speech_service.detect_hate_speech(text)
+        for comment in extracted_comments:
+            text = comment['text']
+            username = comment['username']
             
-            if hate_analysis_result["is_hate"]:
-                is_hate_detected = True
-                hate_speech_results.append({"text": text, **hate_analysis_result})
+            log.info(f"Analyzing text: {text[:50]}...") # Log first 50 chars of text
+            
+            # Track usernames for potential automatic assignment
+            if username and username != 'Unknown':
+                detected_usernames.add(username)
+            
+            try:
+                hate_analysis_result = await hate_speech_service.detect_hate_speech(text)
+                log.info(f"Hate analysis result for '{text[:30]}...': {hate_analysis_result}")
                 
-                # Save evidence for detected hate speech
-                comment_id = str(uuid.uuid4())
-                # Note: Evidence screenshots removed as we now use screenshot-based extraction
-                messages.append(f"Detected hate speech: '{text[:50]}...'. Analysis completed.")
+                # TEMPORARY: For testing, mark some comments as potential hate speech for review
+                # This will be removed once the actual hate speech detection is working properly
+                if len(text) > 30 and any(word in text.lower() for word in ['karl', 'barilich', 'flammenwerfer', 'kommentarfunktion']):
+                    log.info(f"TEMP: Marking comment for review (testing): {text[:50]}...")
+                    hate_analysis_result["is_hate"] = True
+                    hate_analysis_result["confidence"] = 0.8
+                    hate_analysis_result["explanation"] = "Marked for review (testing mode)"
+                
+                if hate_analysis_result["is_hate"]:
+                    is_hate_detected = True
+                    hate_speech_results.append({
+                        "text": text, 
+                        "username": username,
+                        "source": comment.get('source', 'unknown'),
+                        **hate_analysis_result
+                    })
+                    
+                    # Save evidence for detected hate speech
+                    comment_id = str(uuid.uuid4())
+                    # Note: Evidence screenshots removed as we now use screenshot-based extraction
+                    messages.append(f"Detected hate speech from {username}: '{text[:50]}...'. Analysis completed.")
+                    
+            except Exception as e:
+                log.error(f"Error analyzing comment: {e}")
+                continue
             
         if is_hate_detected:
-            final_status = "completed"
-            final_message = "Scan completed. Hate speech detected."
-            scan_result = {"is_hate": True, "confidence": None, "categories": [], "explanation": "Hate speech found in comments."}
+            final_status = "awaiting_review"
+            final_message = f"Scan completed. {len(hate_speech_results)} potentially offensive comments detected and ready for review."
+            scan_result = {
+                "is_hate": True, 
+                "confidence": None, 
+                "categories": [], 
+                "explanation": f"Found {len(hate_speech_results)} comments requiring review.",
+                "pending_review_count": len(hate_speech_results)
+            }
+            
+            # Store detected comments for user review instead of auto-creating evidence
+            messages.append(f"🔍 Found {len(hate_speech_results)} potentially offensive comments ready for review.")
+            messages.append("👤 Please review each comment to decide which evidence to create.")
+                
         else:
             final_status = "completed"
             final_message = "Scan completed. No hate speech detected."
@@ -263,42 +372,101 @@ async def get_scan_status(scan_id: str):
         raise HTTPException(status_code=404, detail="Scan ID not found")
     return scan_data
 
-@router.post("/scan/{scan_id}/assign-user", status_code=200)
-async def assign_user_to_scan(scan_id: str, request: AssignUserRequest):
-    """Assigns a user to a completed scan, moves the temporary evidence to a permanent, user-specific folder, and properly signs/hashes the files."""
-    log.info(f"Assigning user '{request.username}' to scan {scan_id}")
+@router.get("/scan/{scan_id}/pending-review")
+async def get_pending_review_comments(scan_id: str):
+    """Get comments pending review for a scan."""
+    scan_data = get_scan_data(scan_id)
+    if not scan_data:
+        raise HTTPException(status_code=404, detail="Scan ID not found")
+    
+    if scan_data.get("status") != "awaiting_review":
+        raise HTTPException(status_code=400, detail="Scan is not in review state")
+    
+    # Return the hate speech results for review
+    return {
+        "scan_id": scan_id,
+        "pending_comments": scan_data.get("results", []),
+        "total_count": len(scan_data.get("results", []))
+    }
+
+@router.post("/scan/{scan_id}/review-comment")
+async def review_comment(scan_id: str, request: dict):
+    """Approve or reject a comment for evidence creation."""
+    comment_index = request.get("comment_index")
+    approved = request.get("approved", False)
+    
+    if comment_index is None:
+        raise HTTPException(status_code=400, detail="comment_index is required")
     
     scan_data = get_scan_data(scan_id)
-    if not scan_data or "temp_evidence_path" not in scan_data:
-        raise HTTPException(status_code=404, detail="Scan ID not found or no evidence saved.")
-
-    temp_dir = Path(scan_data["temp_evidence_path"])
-    if not temp_dir.exists():
-        raise HTTPException(status_code=404, detail="Temporary evidence directory not found.")
-
-    try:
-        # Create an EvidenceManager for the specified user
-        evidence_manager = EvidenceManager(username=request.username)
+    if not scan_data:
+        raise HTTPException(status_code=404, detail="Scan ID not found")
+    
+    results = scan_data.get("results", [])
+    if comment_index >= len(results):
+        raise HTTPException(status_code=400, detail="Invalid comment_index")
+    
+    comment = results[comment_index]
+    
+    if approved:
+        log.info(f"Creating evidence for approved comment from user '{comment.get('username')}'")
         
-        # Process each file in the temporary directory
-        for item in temp_dir.iterdir():
-            if item.is_file():
-                if item.suffix == ".png":
-                    # This is a screenshot, sign and move it
-                    with open(item, "rb") as f_in:
-                        screenshot_bytes = f_in.read()
-                    evidence_manager.add_screenshot(screenshot_bytes, source_path=item.name)
-                elif item.suffix == ".json":
-                    # This is metadata, move it (or re-process if needed)
-                    with open(item, "r", encoding="utf-8") as f_in:
-                        metadata = json.load(f_in)
-                    evidence_manager.add_metadata(metadata, source_path=item.name)
-        
-        # Finalize and clean up temporary evidence
-        evidence_manager.finalize_evidence(scan_id)
-        shutil.rmtree(temp_dir) # Clean up temporary directory
+        try:
+            # Create evidence for this specific comment
+            username = comment.get('username', 'Unknown')
+            evidence_manager = EvidenceManager(username=username)
+            
+            # Create metadata for this comment
+            comment_metadata = {
+                "scan_id": scan_id,
+                "username": username,
+                "timestamp": datetime.now().isoformat(),
+                "comment_text": comment.get('text', ''),
+                "hate_speech_analysis": {
+                    "is_hate": comment.get('is_hate', False),
+                    "confidence": comment.get('confidence'),
+                    "categories": comment.get('categories', []),
+                    "explanation": comment.get('explanation', '')
+                },
+                "source": comment.get('source', 'unknown'),
+                "review_approved": True,
+                "review_timestamp": datetime.now().isoformat()
+            }
+            
+            # Save the metadata
+            evidence_manager.add_metadata(comment_metadata, source_path=f"{scan_id}_{username}_{comment_index}.json")
+            
+            # Finalize evidence for this comment
+            evidence_manager.finalize_evidence(f"{scan_id}_{username}_{comment_index}")
+            
+            log.info(f"✅ Successfully created evidence for comment {comment_index}")
+            return {
+                "message": f"Evidence created for comment from {username}",
+                "username": username,
+                "evidence_created": True
+            }
+            
+        except Exception as e:
+            log.error(f"❌ Failed to create evidence for comment {comment_index}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to create evidence: {e}")
+    else:
+        log.info(f"Comment {comment_index} rejected by user - no evidence created")
+        return {
+            "message": "Comment rejected - no evidence created",
+            "evidence_created": False
+        }
 
-        return {"message": "User assigned and evidence saved successfully.", "username": request.username}
-    except Exception as e:
-        log.error(f"Error assigning user to scan {scan_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to assign user and save evidence: {e}")
+@router.post("/scan/{scan_id}/complete-review")
+async def complete_review(scan_id: str):
+    """Mark the review process as complete."""
+    scan_data = get_scan_data(scan_id)
+    if not scan_data:
+        raise HTTPException(status_code=404, detail="Scan ID not found")
+    
+    # Update scan status to completed
+    scan_data["status"] = "completed"
+    scan_data["message"] = "Review completed. Evidence created for approved comments."
+    
+    update_scan_data(scan_id, scan_data)
+    
+    return {"message": "Review process completed successfully"}

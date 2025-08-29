@@ -51,3 +51,5 @@ backend/.env
 .DS_Store
 Thumbs.db
 
+Tesseract-OCR/
+temp_cookies.txt
