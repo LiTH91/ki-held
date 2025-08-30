@@ -40,6 +40,10 @@ def create_app() -> FastAPI:
     app.include_router(login_router, prefix="/api", tags=["login"])
     app.include_router(scan_router, prefix="/api", tags=["scan"])
 
+    # Compatibility routes without /api prefix for legacy tests
+    app.include_router(login_router, prefix="", tags=["login-compat"])  # /login-guide/*
+    app.include_router(scan_router, prefix="", tags=["scan-compat"])    # /scan
+
     @app.get("/health")
     async def health_check():
         log.info("[REQUEST] Health check endpoint called")

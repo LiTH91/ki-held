@@ -138,3 +138,14 @@ npm run tauri dev
 - **Robust Fallback System**: Chrome-MCP failures automatically fall back to Windows-MCP screenshot-based methods
 - **Browser API Access**: Direct JavaScript injection for scroll position, page dimensions, and precise navigation
 - **Dependency Management**: Seamless integration with existing `uv` virtual environment setup
+
+### Direct Comment URL Enrichment (2025-08-30)
+- **DOM Anchor Collection**: Via Chrome-MCP `chrome_inject_script`, we collect anchors likely representing comment permalinks (href contains `comment_id`, `permalink_comment_id`, `reply_comment_id`, `pfbid`).
+- **Matching Strategy**: We attach URLs to OCR/CV-detected comments using:
+  - Author token overlap (first/last name)
+  - Vertical proximity (comment y vs. anchor rect.top, DPR-aware)
+  - Bounded Jaccard overlap on content
+- **API Exposure**: Fields `direct_url`, `url_confidence`, `url_source` appear in scan results and evidence metadata.
+- **Frontend Integration**: 
+  - **CommentReview.tsx**: Direct URLs shown as clickable links; URL confidence as color-coded badges; thread hierarchy as level badges and reply context
+  - **ScanStatus.tsx**: Enhanced statistics showing URL extraction coverage, confidence averages, thread distribution (main vs replies), and extraction source breakdown

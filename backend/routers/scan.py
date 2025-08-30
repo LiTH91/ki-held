@@ -188,7 +188,7 @@ async def auto_assign_users_and_create_evidence(scan_id: str, hate_speech_result
 async def run_scan_mcp(scan_id: str, url: str):
     log.info(f"BACKGROUND TASK: Starting scan {scan_id} for URL: {url}")
     messages = ["Scan initialized..."]
-    update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
+    update_scan_data(scan_id, {"status": "in_progress", "messages": messages, "url": url})
 
     try:
         # Establish persistent MCP connection for this scan
@@ -268,6 +268,12 @@ async def run_scan_mcp(scan_id: str, url: str):
         update_scan_data(scan_id, {"status": "in_progress", "messages": messages})
         
         extracted_comments = parse_comments_from_dom(dom_content)
+
+        # PATCH: Enrich with direct URLs via Chrome-MCP when possible
+        try:
+            extracted_comments = await mcp_service.enrich_comments_with_urls(extracted_comments)
+        except Exception as e:
+            log.warning(f"[URL] Skipping URL enrichment in scan pipeline: {e}")
         
         is_hate_detected = False
         hate_speech_results = []
@@ -297,10 +303,14 @@ async def run_scan_mcp(scan_id: str, url: str):
                 
                 if hate_analysis_result["is_hate"]:
                     is_hate_detected = True
+                    # Include URL fields if available
                     hate_speech_results.append({
                         "text": text, 
                         "username": username,
                         "source": comment.get('source', 'unknown'),
+                        "direct_url": comment.get('direct_url', ''),
+                        "url_confidence": comment.get('url_confidence', 0.0),
+                        "url_source": comment.get('url_source', ''),
                         **hate_analysis_result
                     })
                     
@@ -407,6 +417,7 @@ async def review_comment(scan_id: str, request: dict):
         raise HTTPException(status_code=400, detail="Invalid comment_index")
     
     comment = results[comment_index]
+    source_url = scan_data.get("url", "")
     
     if approved:
         log.info(f"Creating evidence for approved comment from user '{comment.get('username')}'")
@@ -416,19 +427,47 @@ async def review_comment(scan_id: str, request: dict):
             username = comment.get('username', 'Unknown')
             evidence_manager = EvidenceManager(username=username)
             
-            # Create metadata for this comment
+            # Create enhanced metadata for this comment
             comment_metadata = {
+                # Basic scan information
                 "scan_id": scan_id,
+                "platform_name": "Facebook",
+                "source_url": source_url,
+                "evidence_timestamp": datetime.now().isoformat(),
+                
+                # Comment identification
+                "comment_id": comment.get('comment_id', f"comment_{comment_index}"),
+                "comment_content": comment.get('text', ''),
+                "comment_timestamp_raw": comment.get('timestamp', ''),
+                "comment_timestamp_parsed": comment.get('timestamp_parsed'),
+                
+                # Author information
                 "username": username,
-                "timestamp": datetime.now().isoformat(),
-                "comment_text": comment.get('text', ''),
+                "profile_link": comment.get('profile_link', ''),
+                "direct_url": comment.get('direct_url', ''),
+                "url_confidence": comment.get('url_confidence', 0.0),
+                "url_source": comment.get('url_source', ''),
+                
+                # Engagement metrics
+                "reaction_count": comment.get('reaction_count', 0),
+                "comment_count": comment.get('comment_count', 0),
+                "reactions_text": comment.get('reactions', ''),
+                
+                # Reply hierarchy
+                "is_reply": comment.get('is_reply', False),
+                "parent_comment_id": comment.get('parent_comment_id'),
+                "context_content": comment.get('context_content', ''),
+                
+                # Hate speech analysis
                 "hate_speech_analysis": {
                     "is_hate": comment.get('is_hate', False),
                     "confidence": comment.get('confidence'),
                     "categories": comment.get('categories', []),
                     "explanation": comment.get('explanation', '')
                 },
-                "source": comment.get('source', 'unknown'),
+                
+                # Technical metadata
+                "extraction_source": comment.get('source', 'unknown'),
                 "review_approved": True,
                 "review_timestamp": datetime.now().isoformat()
             }

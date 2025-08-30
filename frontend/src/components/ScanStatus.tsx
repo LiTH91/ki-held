@@ -7,12 +7,23 @@ interface ScanResult {
   confidence: number;
   categories: string[];
   explanation: string;
+  pending_review_count?: number;
 }
 
 interface ScanStatusData {
   status: string;
   messages: string[];
   result?: ScanResult;
+  // PATCH: Enhanced metadata stats
+  results?: Array<{
+    direct_url?: string;
+    url_confidence?: number;
+    url_source?: string;
+    enhanced_metadata?: {
+      thread_level?: number;
+      is_reply?: boolean;
+    };
+  }>;
 }
 
 const ScanStatus = () => {
@@ -55,6 +66,41 @@ const ScanStatus = () => {
     console.log('Exporting PDF for scan ID:', scanId);
   };
 
+  // PATCH: Calculate URL and thread statistics
+  const calculateEnhancedStats = () => {
+    if (!statusData?.results || statusData.results.length === 0) {
+      return null;
+    }
+
+    const totalComments = statusData.results.length;
+    const commentsWithUrls = statusData.results.filter(r => r.direct_url && r.direct_url.length > 0).length;
+    const avgUrlConfidence = statusData.results
+      .filter(r => r.url_confidence && r.url_confidence > 0)
+      .reduce((sum, r) => sum + (r.url_confidence || 0), 0) / Math.max(1, commentsWithUrls);
+    
+    const mainComments = statusData.results.filter(r => r.enhanced_metadata?.thread_level === 0).length;
+    const replies = statusData.results.filter(r => r.enhanced_metadata?.thread_level && r.enhanced_metadata.thread_level > 0).length;
+    
+    const urlSources = statusData.results
+      .filter(r => r.url_source)
+      .reduce((acc, r) => {
+        acc[r.url_source!] = (acc[r.url_source!] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+    return {
+      totalComments,
+      commentsWithUrls,
+      urlCoveragePercent: totalComments > 0 ? (commentsWithUrls / totalComments) * 100 : 0,
+      avgUrlConfidence: avgUrlConfidence || 0,
+      mainComments,
+      replies,
+      urlSources
+    };
+  };
+
+  const enhancedStats = calculateEnhancedStats();
+
   console.log('[DEBUG] Rendering with statusData:', statusData);
 
   if (error) {
@@ -93,6 +139,41 @@ const ScanStatus = () => {
             ))}
           </ul>
         </div>
+
+        {/* PATCH: Enhanced metadata statistics */}
+        {enhancedStats && (statusData.status === 'completed' || statusData.status === 'awaiting_review') && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-blue-800 mb-3">Extraction Statistics</h4>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-blue-700">
+                  <strong>Comments Found:</strong> {enhancedStats.totalComments}
+                </p>
+                <p className="text-blue-700">
+                  <strong>Main Comments:</strong> {enhancedStats.mainComments}
+                </p>
+                <p className="text-blue-700">
+                  <strong>Replies:</strong> {enhancedStats.replies}
+                </p>
+              </div>
+              <div>
+                <p className="text-blue-700">
+                  <strong>Direct URLs:</strong> {enhancedStats.commentsWithUrls} ({enhancedStats.urlCoveragePercent.toFixed(1)}%)
+                </p>
+                {enhancedStats.avgUrlConfidence > 0 && (
+                  <p className="text-blue-700">
+                    <strong>Avg URL Confidence:</strong> {(enhancedStats.avgUrlConfidence * 100).toFixed(1)}%
+                  </p>
+                )}
+                {Object.keys(enhancedStats.urlSources).length > 0 && (
+                  <p className="text-blue-700">
+                    <strong>URL Sources:</strong> {Object.entries(enhancedStats.urlSources).map(([source, count]) => `${source} (${count})`).join(', ')}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {statusData.status === 'awaiting_review' && (
           <div className="mt-6">

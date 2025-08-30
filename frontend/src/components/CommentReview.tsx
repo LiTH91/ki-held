@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -10,6 +10,19 @@ interface Comment {
   confidence?: number;
   categories?: string[];
   explanation?: string;
+  // PATCH: Enhanced metadata fields
+  direct_url?: string;
+  url_confidence?: number;
+  url_source?: string;
+  enhanced_metadata?: {
+    thread_level?: number;
+    parent_comment_id?: string;
+    parent_username?: string;
+    is_reply?: boolean;
+    has_replies?: boolean;
+    reply_count?: number;
+    relative_indent?: number;
+  };
 }
 
 interface ReviewData {
@@ -136,14 +149,74 @@ const CommentReview = () => {
               </div>
               <div className="ml-4">
                 <h3 className="text-lg font-medium text-gray-900">{currentComment.username || 'Unknown User'}</h3>
-                <p className="text-sm text-gray-500">Source: {currentComment.source}</p>
+                <div className="flex items-center space-x-2">
+                  <p className="text-sm text-gray-500">Source: {currentComment.source}</p>
+                  {/* PATCH: Thread hierarchy badge */}
+                  {currentComment.enhanced_metadata?.thread_level !== undefined && (
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      currentComment.enhanced_metadata.thread_level === 0 
+                        ? 'bg-blue-100 text-blue-800' 
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {currentComment.enhanced_metadata.thread_level === 0 ? 'Main' : `Reply L${currentComment.enhanced_metadata.thread_level}`}
+                    </span>
+                  )}
+                  {/* PATCH: URL confidence badge */}
+                  {currentComment.url_confidence && currentComment.url_confidence > 0 && (
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      currentComment.url_confidence >= 0.7 
+                        ? 'bg-green-100 text-green-800' 
+                        : currentComment.url_confidence >= 0.5 
+                        ? 'bg-yellow-100 text-yellow-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      URL {(currentComment.url_confidence * 100).toFixed(0)}%
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
+            {/* PATCH: Thread context for replies */}
+            {currentComment.enhanced_metadata?.is_reply && currentComment.enhanced_metadata?.parent_username && (
+              <div className="bg-blue-50 border-l-4 border-blue-200 p-3 mb-4">
+                <p className="text-sm text-blue-800">
+                  <strong>Replying to:</strong> {currentComment.enhanced_metadata.parent_username}
+                  {currentComment.enhanced_metadata.reply_count && currentComment.enhanced_metadata.reply_count > 0 && (
+                    <span className="ml-2 text-xs text-blue-600">
+                      ({currentComment.enhanced_metadata.reply_count} replies)
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
+
             {/* Comment Content */}
             <div className="bg-gray-50 rounded-lg p-4 mb-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Comment Text:</h4>
+              <div className="flex justify-between items-start mb-2">
+                <h4 className="text-sm font-medium text-gray-700">Comment Text:</h4>
+                {/* PATCH: Direct URL link */}
+                {currentComment.direct_url && (
+                  <a
+                    href={currentComment.direct_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors"
+                  >
+                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    Direct Link
+                  </a>
+                )}
+              </div>
               <p className="text-gray-900 whitespace-pre-wrap">{currentComment.text}</p>
+              {/* PATCH: URL source info */}
+              {currentComment.url_source && (
+                <p className="text-xs text-gray-500 mt-2">
+                  URL extracted via: {currentComment.url_source}
+                </p>
+              )}
             </div>
 
             {/* AI Analysis */}

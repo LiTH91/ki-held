@@ -3268,5 +3268,261 @@
       "Scan initialized...",
       "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0WL2LmzXBynineCmqMMGna2jM6kXaYaAvQGa8CZxHVqiPS9ThT8UPGQnCbrzfK9zZl..."
     ]
+  },
+  "fd8d22be-2770-4659-b038-597eeb3a434c": {
+    "status": "completed",
+    "message": "Scan completed. No hate speech detected.",
+    "results": [],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid02jLSqioL9j6p1UYRjQJLy2SsJCSTqSEQKVTCcs2d1Ysbm718X1fQSZjfsF5wgzY8Al...",
+      "\u2705 Facebook workflow completed - all interactions handled automatically.",
+      "\u23ed\ufe0f Skipping additional scanning cycles (no scrolling needed).",
+      "Getting DOM content...",
+      "Received DOM content (length: 2632).",
+      "Analyzing content for hate speech...",
+      "Scan completed. No hate speech detected."
+    ],
+    "result": {
+      "is_hate": false,
+      "confidence": null,
+      "categories": [],
+      "explanation": "No hate speech found in comments."
+    }
+  },
+  "d52f6fa0-d7b1-4820-b041-d7e13316b420": {
+    "status": "completed",
+    "message": "Review completed. Evidence created for approved comments.",
+    "results": [
+      {
+        "text": "2 Karl Barilich Wie war das mit den Flammenwerfern, die gegen Impfgegner oder Nichtgeimpfte eingesetzt werden sollen? Nur eine Frage",
+        "username": "Alle Kommentare w",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": false
+      },
+      {
+        "text": "2 Karl Barilich Wie war das mit den Flammenwerfern, die gegen Impfgegner oder Nichtgeimpfte eingesetzt werden sollen? Nur eine Frage",
+        "username": "Alle Kommentare w",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": false
+      },
+      {
+        "text": "2 Karl Barilich Wie war das mit den Flammenwerfern, die gegen Impfgegner oder Nichtgeimpfte eingesetzt werden sollen? Nur eine Frage",
+        "username": "Alle Kommentare w",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": false
+      },
+      {
+        "text": "2 Karl Barilich Wie war das mit den Flammenwerfern, die gegen Impfgegner oder Nichtgeimpfte eingesetzt werden sollen? Nur eine Frage",
+        "username": "Alle Kommentare w",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": false
+      },
+      {
+        "text": "Marko Manu mit Flammenwerfern auf Menschen losgehen? Letztkkassig!! & Kommentieren 80089",
+        "username": "@\u00ae atiede steiner",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": true
+      },
+      {
+        "text": "Marko Manu mit Flammenwerfern auf Menschen losgehen? Letztkkassig!!",
+        "username": "@\u00ae atiede steiner",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": true
+      },
+      {
+        "text": "Marko Manu mit Flammenwerfern auf Menschen losgehen? Letztkkassig!!",
+        "username": "@\u00ae atiede steiner",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": true
+      },
+      {
+        "text": "Marko Manu mit Flammenwerfern auf Menschen losgehen? Letztkkassig!!",
+        "username": "@\u00ae atiede steiner",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": true
+      },
+      {
+        "text": "Marko Manu mit Flammenwerfern auf Menschen losgehen? Letztkkassig!!",
+        "username": "\u00ae Atfriede steiner",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": true
+      },
+      {
+        "text": "Marko Manu mit Flammenwerfern auf Menschen losgehen? Letztkkassig!!",
+        "username": "\u00ae Atfriede steiner",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": true
+      },
+      {
+        "text": "! die FPO W\u00e4hler sollten eine SammelkLage machen , denn nicht jeder der anders denkt ist ein Nazi bzw brauner DReck.",
+        "username": "\u00ae sisiklunker",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.7124410271644592,
+        "categories": [
+          "hate"
+        ],
+        "explanation": "Der Text wurde mit 71.2% Konfidenz als problematisch eingestuft. Erkannte Probleme: hasserf\u00fcllte Sprache. Dieser Inhalt k\u00f6nnte als verletzend oder diskriminierend wahrgenommen werden.",
+        "dialect_detected": false
+      },
+      {
+        "text": "Rechte Neonazis gegen die Flammenwerfer oder Wasserwerfer EINGESETZT verklagt sie geh\u00f6rt das zur Show dazu ??? = Kommentieren 8 eo\u00ae 8 \u2014 Se \u2014_ \u2014 & = [ @ = 2252",
+        "username": "Christine Heuer",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": true
+      },
+      {
+        "text": "Rechte Neonazis gegen die Flammenwerfer oder Wasserwerfer EINGESETZT verklagt sie geh\u00f6rt das zur Show dazu 72?",
+        "username": "Christine Heuer",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": true
+      },
+      {
+        "text": "Rechte Neonazis gegen die Flammenwerfer oder Wasserwerfer EINGESETZT verklagt sie geh\u00f6rt das zur Show dazu ???",
+        "username": "Christine Heuer",
+        "source": "screenshot_extraction",
+        "is_hate": true,
+        "confidence": 0.8,
+        "categories": [
+          "neither"
+        ],
+        "explanation": "Marked for review (testing mode)",
+        "dialect_detected": true
+      }
+    ],
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://www.facebook.com/oe24.at/posts/pfbid0WL2LmzXBynineCmqMMGna2jM6kXaYaAvQGa8CZxHVqiPS9ThT8UPGQnCbrzfK9zZl...",
+      "\u2705 Facebook workflow completed - all interactions handled automatically.",
+      "\u23ed\ufe0f Skipping additional scanning cycles (no scrolling needed).",
+      "Getting DOM content...",
+      "Received DOM content (length: 54783).",
+      "Analyzing content for hate speech...",
+      "Detected hate speech from Alle Kommentare w: '2 Karl Barilich Wie war das mit den Flammenwerfern...'. Analysis completed.",
+      "Detected hate speech from Alle Kommentare w: '2 Karl Barilich Wie war das mit den Flammenwerfern...'. Analysis completed.",
+      "Detected hate speech from Alle Kommentare w: '2 Karl Barilich Wie war das mit den Flammenwerfern...'. Analysis completed.",
+      "Detected hate speech from Alle Kommentare w: '2 Karl Barilich Wie war das mit den Flammenwerfern...'. Analysis completed.",
+      "Detected hate speech from @\u00ae atiede steiner: 'Marko Manu mit Flammenwerfern auf Menschen losgehe...'. Analysis completed.",
+      "Detected hate speech from @\u00ae atiede steiner: 'Marko Manu mit Flammenwerfern auf Menschen losgehe...'. Analysis completed.",
+      "Detected hate speech from @\u00ae atiede steiner: 'Marko Manu mit Flammenwerfern auf Menschen losgehe...'. Analysis completed.",
+      "Detected hate speech from @\u00ae atiede steiner: 'Marko Manu mit Flammenwerfern auf Menschen losgehe...'. Analysis completed.",
+      "Detected hate speech from \u00ae Atfriede steiner: 'Marko Manu mit Flammenwerfern auf Menschen losgehe...'. Analysis completed.",
+      "Detected hate speech from \u00ae Atfriede steiner: 'Marko Manu mit Flammenwerfern auf Menschen losgehe...'. Analysis completed.",
+      "Detected hate speech from \u00ae sisiklunker: '! die FPO W\u00e4hler sollten eine SammelkLage machen ,...'. Analysis completed.",
+      "Detected hate speech from Christine Heuer: 'Rechte Neonazis gegen die Flammenwerfer oder Wasse...'. Analysis completed.",
+      "Detected hate speech from Christine Heuer: 'Rechte Neonazis gegen die Flammenwerfer oder Wasse...'. Analysis completed.",
+      "Detected hate speech from Christine Heuer: 'Rechte Neonazis gegen die Flammenwerfer oder Wasse...'. Analysis completed.",
+      "\ud83d\udd0d Found 14 potentially offensive comments ready for review.",
+      "\ud83d\udc64 Please review each comment to decide which evidence to create.",
+      "Scan completed. 14 potentially offensive comments detected and ready for review."
+    ],
+    "result": {
+      "is_hate": true,
+      "confidence": null,
+      "categories": [],
+      "explanation": "Found 14 comments requiring review.",
+      "pending_review_count": 14
+    }
+  },
+  "5d637c96-9003-44c5-a7e8-a4bb1905b28f": {
+    "status": "failed",
+    "message": "An unexpected error occurred: Received empty or very small DOM content. Likely failed to extract.",
+    "messages": [
+      "Scan initialized...",
+      "Navigating to https://example.com...",
+      "\ud83d\udd04 Starting traditional scanning cycles for non-Facebook content...",
+      "--- Interaction Cycle 1/8 ---",
+      "Action: Facebook sorting handled automatically during navigation.",
+      "--- Interaction Cycle 2/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 3/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 4/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 5/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 6/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 7/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction Cycle 8/8 ---",
+      "Action: No interactive buttons found. Scrolling down.",
+      "--- Interaction cycles complete ---",
+      "Getting DOM content...",
+      "An unexpected error occurred: Received empty or very small DOM content. Likely failed to extract."
+    ]
   }
 }

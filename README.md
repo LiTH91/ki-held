@@ -5,7 +5,15 @@ A Windows desktop app to scan social media pages, gather evidence, and fight onl
 - Tauri desktop frontend (React + TypeScript)
 - Windows-MCP automation service (FastMCP over STDIO)
 
-### Latest Updates (2025-08-29)
+### Latest Updates (2025-08-30)
+- ✅ **Computer Vision Thread Hierarchy**: X-coordinate analysis detects Facebook comment nesting levels (main vs replies) with parent-child relationships
+- ✅ **Direct Comment URL Extraction**: Chrome-MCP DOM scanning extracts permalink URLs with confidence scoring and author/position matching
+- ✅ **Enhanced Frontend UI**: CommentReview shows clickable direct links, confidence badges, thread level indicators, and reply context
+- ✅ **Advanced Extraction Statistics**: ScanStatus displays URL coverage, confidence averages, thread distribution, and source breakdown
+- ✅ **Intelligent Username Detection**: Line-based author recognition with capitalization patterns and UI element filtering
+- ✅ **Multi-Source Comment Fusion**: Combines OCR text extraction with computer vision hierarchy for comprehensive metadata
+
+### Previous Updates (2025-08-29)
 - ✅ **Dynamic Content Loading**: Screenshot-based end detection for automatic lazy-content loading (Facebook comments)
 - ✅ **Adaptive Scroll Strategy**: Three-phase approach (pre-load → anchor return → adaptive extraction) with no fixed limits
 - ✅ **Enhanced Button Detection**: State-Tool fallback with OCR/Template matching, bounding-box filtering, and pre-click validation

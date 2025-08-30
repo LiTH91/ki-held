@@ -2285,6 +2285,9 @@ async def extract_comments_adaptive() -> list[dict]:
             
             # STEP 1: Extract comments from current position
             current_comments = await extract_visible_comments_ocr(seen_content)
+            # Attach URLs via Chrome-MCP if available
+            if current_comments:
+                current_comments = await enrich_comments_with_urls(current_comments)
             log.info(f"📝 [ADAPTIVE] Extracted {len(current_comments)} comments from position {position_counter}")
             
             # Add comments to main list (duplicates already filtered by extract_visible_comments_ocr)
@@ -2303,6 +2306,8 @@ async def extract_comments_adaptive() -> list[dict]:
                 
                 # Extract comments from expanded view
                 expanded_comments = await extract_visible_comments_ocr(seen_content)
+                if expanded_comments:
+                    expanded_comments = await enrich_comments_with_urls(expanded_comments)
                 log.info(f"📝 [ADAPTIVE] Extracted {len(expanded_comments)} comments from expanded view")
                 
                 # Add expanded comments to main list (duplicates already filtered)
@@ -2458,7 +2463,7 @@ async def extract_comments_via_screenshots() -> list[dict]:
         return extracted_comments
 
 async def extract_visible_comments_ocr(seen_content: set) -> list[dict]:
-    """Extract comments visible on current screen using OCR."""
+    """Extract comments visible on current screen using OCR with enhanced thread hierarchy."""
     cycle_comments = []
     max_screenshots = 3  # Multiple screenshots per cycle
     
@@ -2495,11 +2500,32 @@ async def extract_visible_comments_ocr(seen_content: set) -> list[dict]:
             continue
         seen_content.add(content_hash)
         
-        # Parse comments from OCR text
-        parsed_comments = parse_comments_from_ocr(ocr_text)
-        if parsed_comments:
-            cycle_comments.extend(parsed_comments)
-            log.info(f"📝 Extracted {len(parsed_comments)} comments from screenshot {screenshot_num + 1}")
+        # PATCH: Enhanced comment parsing with thread hierarchy
+        try:
+            # First: Traditional OCR parsing
+            parsed_comments = parse_comments_from_ocr(ocr_text)
+            
+            # Second: Advanced thread hierarchy analysis
+            hierarchy_comments = await analyze_comment_hierarchy_visual(screenshot_data)
+            
+            if hierarchy_comments:
+                log.info(f"🌳 Thread hierarchy analysis found {len(hierarchy_comments)} structured comments")
+                
+                # Merge traditional parsing with hierarchy analysis
+                enhanced_comments = merge_ocr_with_hierarchy(parsed_comments, hierarchy_comments)
+                cycle_comments.extend(enhanced_comments)
+                log.info(f"📝 Extracted {len(enhanced_comments)} enhanced comments with hierarchy from screenshot {screenshot_num + 1}")
+            elif parsed_comments:
+                cycle_comments.extend(parsed_comments)
+                log.info(f"📝 Extracted {len(parsed_comments)} comments from screenshot {screenshot_num + 1}")
+                
+        except Exception as hierarchy_error:
+            log.warning(f"Thread hierarchy analysis failed, using fallback: {hierarchy_error}")
+            # Fallback to traditional parsing
+            parsed_comments = parse_comments_from_ocr(ocr_text)
+            if parsed_comments:
+                cycle_comments.extend(parsed_comments)
+                log.info(f"📝 Extracted {len(parsed_comments)} comments (fallback) from screenshot {screenshot_num + 1}")
         
         # Small scroll between screenshots to capture different content
         if screenshot_num < max_screenshots - 1:
@@ -2507,6 +2533,157 @@ async def extract_visible_comments_ocr(seen_content: set) -> list[dict]:
             await asyncio.sleep(0.8)
     
     return cycle_comments
+
+# PATCH: Direct Comment URL extraction via Chrome-MCP
+async def get_comment_anchors_via_chrome() -> list[dict]:
+    """
+    Use Chrome-MCP to inject JS and gather potential direct comment anchors and their positions.
+    Returns a list of anchors with href, text, ariaLabel, bounding rect, and device pixel ratio.
+    """
+    try:
+        chrome_client = await get_chrome_mcp_client()
+        if not chrome_client or not chrome_client.is_connected:
+            log.warning("[URL] Chrome-MCP not connected; skipping DOM anchor extraction")
+            return []
+
+        script = """
+        const dpr = window.devicePixelRatio || 1;
+        const anchors = Array.from(document.querySelectorAll('a'))
+          .filter(a => {
+            const href = (a.getAttribute('href')||'').toLowerCase();
+            // Heuristics for Facebook comment permalinks
+            return href.includes('comment') || href.includes('comment_id') || href.includes('permalink_comment_id') || href.includes('reply_comment_id') || href.includes('pfbid');
+          })
+          .map(a => {
+            const rect = a.getBoundingClientRect();
+            const href = a.href ? new URL(a.href, location.href).href : '';
+            return {
+              href,
+              text: (a.textContent||'').trim(),
+              aria: (a.getAttribute('aria-label')||'').trim(),
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              height: rect.height
+            };
+          });
+        return { dpr, anchors };
+        """.strip()
+
+        result = await chrome_client.send_command("chrome_inject_script", {"script": script})
+        if not isinstance(result, dict):
+            log.warning(f"[URL] Unexpected result from Chrome-MCP: {type(result)}")
+            return []
+        anchors = result.get('anchors') or []
+        dpr = result.get('dpr') or 1
+        # Normalize numeric fields
+        for a in anchors:
+            for k in ("top","left","width","height"):
+                try:
+                    a[k] = float(a.get(k, 0))
+                except Exception:
+                    a[k] = 0.0
+            a["dpr"] = float(dpr)
+        log.info(f"[URL] Retrieved {len(anchors)} potential comment anchors from DOM")
+        return anchors
+    except Exception as e:
+        log.warning(f"[URL] Failed to get comment anchors via Chrome-MCP: {e}")
+        return []
+
+def _score_anchor_for_comment(comment: dict, anchor: dict) -> float:
+    """Compute a match score between a comment and an anchor using author/content similarity and vertical proximity."""
+    author = (comment.get('author') or comment.get('username') or '').lower().strip()
+    content = (comment.get('content') or '').lower().strip()
+    dpr = anchor.get('dpr', 1.0) or 1.0
+    # Approximate vertical distance alignment (viewport pixels vs screenshot pixels)
+    y_comment = float(comment.get('y_position') or 0)
+    y_anchor = float(anchor.get('top') or 0) * dpr
+    vertical_distance = abs(y_comment - y_anchor) if y_comment > 0 else None
+
+    # Text features
+    haystack = f"{anchor.get('text','')} {anchor.get('aria','')}".lower()
+    if author and author in haystack:
+        author_match = 1.0
+    else:
+        # Partial author token match (e.g., first or last name present)
+        tokens = [t for t in author.split() if len(t) > 2]
+        if tokens:
+            hits = sum(1 for t in tokens if t in haystack)
+            author_match = hits / len(tokens)
+        else:
+            author_match = 0.0
+
+    # Crude content overlap
+    def jaccard(a: str, b: str) -> float:
+        if not a or not b:
+            return 0.0
+        sa = set(a.split())
+        sb = set(b.split())
+        if not sa or not sb:
+            return 0.0
+        inter = len(sa & sb)
+        union = len(sa | sb)
+        return inter / union if union else 0.0
+
+    content_match = jaccard(content[:80], haystack[:200])  # limit for speed
+
+    # Distance score: within 80 px -> 1.0 down to 0 at 300 px
+    if vertical_distance is None:
+        # DOM-only fallback: no positional info for comment; give a neutral boost
+        distance_score = 0.2
+    else:
+        if vertical_distance <= 80:
+            distance_score = 1.0
+        elif vertical_distance >= 300:
+            distance_score = 0.0
+        else:
+            distance_score = 1.0 - (vertical_distance - 80) / (300 - 80)
+
+    # Weighted score: author 0.5, distance 0.4, content 0.1
+    score = author_match * 0.5 + distance_score * 0.4 + content_match * 0.1
+    return float(score)
+
+def attach_urls_to_comments(comments: list[dict], anchors: list[dict]) -> list[dict]:
+    """
+    Attach best-matching direct URL from DOM anchors to each comment when possible.
+    Adds keys: direct_url, url_confidence, url_source="chrome_dom".
+    """
+    if not comments or not anchors:
+        return comments
+
+    matched = set()
+    for comment in comments:
+        best = None
+        best_score = 0.0
+        for idx, anchor in enumerate(anchors):
+            if idx in matched:
+                continue
+            score = _score_anchor_for_comment(comment, anchor)
+            if score > best_score:
+                best_score = score
+                best = (idx, anchor)
+        # Threshold to accept a match
+        if best and best_score >= 0.55 and best[1].get('href'):
+            matched.add(best[0])
+            comment['direct_url'] = best[1]['href']
+            comment['url_confidence'] = round(best_score, 3)
+            comment['url_source'] = 'chrome_dom'
+        else:
+            comment.setdefault('direct_url', '')
+            comment.setdefault('url_confidence', 0.0)
+            comment.setdefault('url_source', '')
+    return comments
+
+async def enrich_comments_with_urls(comments: list[dict]) -> list[dict]:
+    """Fetch DOM anchors via Chrome-MCP and attach direct URLs to provided comments."""
+    try:
+        anchors = await get_comment_anchors_via_chrome()
+        if not anchors:
+            return comments
+        return attach_urls_to_comments(comments, anchors)
+    except Exception as e:
+        log.warning(f"[URL] Enrichment failed: {e}")
+        return comments
 
 async def validate_scan_url(original_url: str) -> bool:
     """
@@ -3065,7 +3242,7 @@ async def find_and_click_expansion_buttons() -> bool:
         return False
 
 def parse_comments_from_ocr(ocr_text: str) -> list[dict]:
-    """Parse comment data from OCR extracted text."""
+    """Parse comment data from OCR extracted text with enhanced metadata extraction."""
     comments = []
     
     try:
@@ -3082,13 +3259,22 @@ def parse_comments_from_ocr(ocr_text: str) -> list[dict]:
                 # Possible author name
                 if current_comment:
                     if current_comment.get('content'):
+                        # PATCH: Enhanced metadata extraction before storing comment
+                        current_comment = enhance_comment_metadata(current_comment, ocr_text)
                         comments.append(current_comment)
                 
                 current_comment = {
                     'author': line,
                     'content': '',
                     'timestamp': '',
+                    'timestamp_parsed': None,
                     'reactions': '',
+                    'reaction_count': 0,
+                    'comment_count': 0,
+                    'profile_link': '',
+                    'is_reply': False,
+                    'parent_comment_id': None,
+                    'context_content': '',
                     'source': 'screenshot_ocr'
                 }
             
@@ -3096,11 +3282,17 @@ def parse_comments_from_ocr(ocr_text: str) -> list[dict]:
             elif any(pattern in line.lower() for pattern in ['min', 'std', 'tag', 'woche', 'monat', 'jahr', 'h ', 'm ', 'd ']):
                 if current_comment:
                     current_comment['timestamp'] = line
+                    # PATCH: Parse timestamp to structured format
+                    current_comment['timestamp_parsed'] = parse_facebook_timestamp(line)
             
             # Look for reaction indicators
             elif any(reaction in line.lower() for reaction in ['gefällt', 'like', 'love', 'antworten', 'reply']):
                 if current_comment:
                     current_comment['reactions'] = line
+                    # PATCH: Extract numeric engagement metrics
+                    reaction_count, comment_count = extract_engagement_metrics(line)
+                    current_comment['reaction_count'] = reaction_count
+                    current_comment['comment_count'] = comment_count
             
             # Everything else is likely comment content
             else:
@@ -3112,6 +3304,8 @@ def parse_comments_from_ocr(ocr_text: str) -> list[dict]:
         
         # Don't forget the last comment
         if current_comment and current_comment.get('content'):
+            # PATCH: Enhanced metadata extraction for last comment
+            current_comment = enhance_comment_metadata(current_comment, ocr_text)
             comments.append(current_comment)
         
         # Filter out very short or invalid comments
@@ -3128,6 +3322,735 @@ def parse_comments_from_ocr(ocr_text: str) -> list[dict]:
     except Exception as e:
         log.error(f"❌ Comment parsing failed: {e}")
         return []
+
+# PATCH: Enhanced metadata extraction functions
+def parse_facebook_timestamp(timestamp_text: str) -> dict:
+    """
+    Parse Facebook timestamp text into structured datetime information.
+    
+    Args:
+        timestamp_text: Raw timestamp from OCR (e.g., "vor 2 Std", "vor 15 Min")
+        
+    Returns:
+        Dictionary with parsed timestamp information
+    """
+    import re
+    from datetime import datetime, timedelta
+    
+    if not timestamp_text:
+        return None
+    
+    try:
+        # Normalize text
+        text = timestamp_text.lower().strip()
+        current_time = datetime.now()
+        
+        # German patterns
+        patterns = [
+            (r'vor (\d+) min', lambda m: current_time - timedelta(minutes=int(m.group(1)))),
+            (r'vor (\d+) std', lambda m: current_time - timedelta(hours=int(m.group(1)))),
+            (r'vor (\d+) tag', lambda m: current_time - timedelta(days=int(m.group(1)))),
+            (r'vor (\d+) woche', lambda m: current_time - timedelta(weeks=int(m.group(1)))),
+            (r'vor (\d+) monat', lambda m: current_time - timedelta(days=int(m.group(1)) * 30)),
+            (r'vor (\d+) jahr', lambda m: current_time - timedelta(days=int(m.group(1)) * 365)),
+            # Short forms
+            (r'(\d+) ?h', lambda m: current_time - timedelta(hours=int(m.group(1)))),
+            (r'(\d+) ?m', lambda m: current_time - timedelta(minutes=int(m.group(1)))),
+            (r'(\d+) ?d', lambda m: current_time - timedelta(days=int(m.group(1)))),
+            (r'(\d+) ?w', lambda m: current_time - timedelta(weeks=int(m.group(1)))),
+        ]
+        
+        for pattern, calculator in patterns:
+            match = re.search(pattern, text)
+            if match:
+                calculated_time = calculator(match)
+                return {
+                    'raw_text': timestamp_text,
+                    'parsed_datetime': calculated_time.isoformat(),
+                    'relative_text': text,
+                    'confidence': 'high'
+                }
+        
+        # If no pattern matches, return raw text with low confidence
+        return {
+            'raw_text': timestamp_text,
+            'parsed_datetime': None,
+            'relative_text': text,
+            'confidence': 'low'
+        }
+        
+    except Exception as e:
+        log.debug(f"Timestamp parsing failed for '{timestamp_text}': {e}")
+        return {
+            'raw_text': timestamp_text,
+            'parsed_datetime': None,
+            'relative_text': timestamp_text,
+            'confidence': 'error'
+        }
+
+def extract_engagement_metrics(reaction_text: str) -> tuple[int, int]:
+    """
+    Extract reaction and comment counts from Facebook engagement text.
+    
+    Args:
+        reaction_text: Text containing reaction/comment info (e.g., "42 Gefällt mir · 17 Antworten")
+        
+    Returns:
+        Tuple of (reaction_count, comment_count)
+    """
+    import re
+    
+    if not reaction_text:
+        return 0, 0
+    
+    try:
+        text = reaction_text.lower()
+        reaction_count = 0
+        comment_count = 0
+        
+        # Look for reaction patterns
+        reaction_patterns = [
+            r'(\d+)\s*gefällt',
+            r'(\d+)\s*like',
+            r'(\d+)\s*👍',
+            r'(\d+)\s*❤️',
+            r'(\d+)\s*😊',
+            r'(\d+)\s*reaktion'
+        ]
+        
+        for pattern in reaction_patterns:
+            match = re.search(pattern, text)
+            if match:
+                reaction_count = max(reaction_count, int(match.group(1)))
+        
+        # Look for comment patterns
+        comment_patterns = [
+            r'(\d+)\s*antwort',
+            r'(\d+)\s*kommentar',
+            r'(\d+)\s*reply',
+            r'(\d+)\s*comment',
+            r'(\d+)\s*💬'
+        ]
+        
+        for pattern in comment_patterns:
+            match = re.search(pattern, text)
+            if match:
+                comment_count = max(comment_count, int(match.group(1)))
+        
+        return reaction_count, comment_count
+        
+    except Exception as e:
+        log.debug(f"Engagement metrics extraction failed for '{reaction_text}': {e}")
+        return 0, 0
+
+def enhance_comment_metadata(comment: dict, full_ocr_text: str) -> dict:
+    """
+    Enhance comment metadata with additional extracted information.
+    
+    Args:
+        comment: Basic comment dictionary
+        full_ocr_text: Complete OCR text for context analysis
+        
+    Returns:
+        Enhanced comment dictionary with additional metadata
+    """
+    try:
+        # Extract profile link if possible
+        if comment.get('author'):
+            comment['profile_link'] = generate_facebook_profile_link(comment['author'])
+        
+        # Detect if this is a reply
+        comment['is_reply'] = detect_reply_structure(comment, full_ocr_text)
+        
+        # Extract context if it's a reply
+        if comment['is_reply']:
+            comment['context_content'] = extract_reply_context(comment, full_ocr_text)
+        
+        # Generate a pseudo-ID for tracking
+        comment['comment_id'] = generate_comment_id(comment)
+        
+        return comment
+        
+    except Exception as e:
+        log.debug(f"Comment metadata enhancement failed: {e}")
+        return comment
+
+def generate_facebook_profile_link(username: str) -> str:
+    """
+    Generate a potential Facebook profile link from username.
+    Note: This is a best-guess, may not always be accurate.
+    """
+    if not username:
+        return ""
+    
+    import re
+    # Clean username for URL
+    cleaned_name = username.strip().replace(' ', '.').lower()
+    cleaned_name = re.sub(r'[^a-z0-9.]', '', cleaned_name)
+    
+    return f"https://www.facebook.com/{cleaned_name}"
+
+def detect_reply_structure(comment: dict, full_ocr_text: str) -> bool:
+    """
+    Detect if a comment is a reply based on OCR text structure.
+    """
+    try:
+        content = comment.get('content', '').lower()
+        author = comment.get('author', '').lower()
+        
+        # Look for reply indicators
+        reply_indicators = [
+            '@' in content,  # Direct mentions
+            'antwort auf' in content,
+            'reply to' in content,
+            # Check if content appears indented/nested in OCR
+            author in full_ocr_text and full_ocr_text.find(author) > 100  # Not at the start
+        ]
+        
+        return any(reply_indicators)
+        
+    except Exception as e:
+        log.debug(f"Reply detection failed: {e}")
+        return False
+
+def extract_reply_context(comment: dict, full_ocr_text: str) -> str:
+    """
+    Extract parent comment context for replies.
+    """
+    try:
+        # This is a simplified implementation
+        # In a full implementation, you'd need more sophisticated context extraction
+        lines = full_ocr_text.split('\n')
+        author = comment.get('author', '')
+        
+        # Find the line with the current author
+        author_line_idx = -1
+        for i, line in enumerate(lines):
+            if author in line:
+                author_line_idx = i
+                break
+        
+        if author_line_idx > 0:
+            # Look for content in previous lines (potential parent comment)
+            context_lines = lines[max(0, author_line_idx - 10):author_line_idx]
+            return ' '.join(line.strip() for line in context_lines if line.strip())
+        
+        return ""
+        
+    except Exception as e:
+        log.debug(f"Context extraction failed: {e}")
+        return ""
+
+def generate_comment_id(comment: dict) -> str:
+    """
+    Generate a pseudo-unique ID for a comment based on its content.
+    """
+    import hashlib
+    from datetime import datetime
+    
+    try:
+        # Create ID from author + content + timestamp
+        id_string = f"{comment.get('author', '')}{comment.get('content', '')}{comment.get('timestamp', '')}"
+        return hashlib.md5(id_string.encode()).hexdigest()[:12]
+    except Exception:
+        return f"comment_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+# PATCH: Computer Vision-based Thread Hierarchy Detection
+async def analyze_comment_hierarchy_visual(screenshot_base64: str = None) -> list[dict]:
+    """
+    Computer Vision-basierte Thread-Hierarchie-Erkennung für Facebook-Kommentare.
+    
+    Args:
+        screenshot_base64: Optional screenshot, falls None wird neuer Screenshot gemacht
+        
+    Returns:
+        Liste von Kommentaren mit Thread-Hierarchie-Information
+    """
+    try:
+        # Screenshot abrufen falls nicht bereitgestellt
+        if not screenshot_base64:
+            log.info("📸 Taking screenshot for thread hierarchy analysis...")
+            screenshot_result = await mcp_client.send_command("Screenshot-Tool", {})
+            screenshot_base64 = screenshot_result.data if hasattr(screenshot_result, 'data') else screenshot_result
+        
+        # OCR mit Bounding-Box-Koordinaten
+        log.info("🔍 Extracting text with coordinate information...")
+        ocr_result = ocr_service.extract_text_from_base64(screenshot_base64)
+        
+        if not ocr_result.get('words'):
+            log.warning("No text found in screenshot for hierarchy analysis")
+            return []
+        
+        # Identifiziere potentielle Benutzernamen (Authors)
+        log.info("👤 Identifying usernames and comment structure...")
+        potential_authors = identify_usernames_from_ocr(ocr_result)
+        
+        # Analysiere X-Koordinaten für Einrückungsebenen
+        log.info("📐 Analyzing indentation levels...")
+        hierarchy_data = analyze_indentation_levels(potential_authors)
+        
+        # Baue Thread-Struktur auf
+        log.info("🌳 Building thread tree structure...")
+        thread_structure = build_thread_tree_structure(hierarchy_data)
+        
+        # Erweitere mit Content-Zuordnung
+        log.info("📝 Mapping content to thread structure...")
+        enhanced_structure = map_content_to_threads(thread_structure, ocr_result)
+        
+        log.info(f"🎯 Thread hierarchy analysis complete: {len(enhanced_structure)} comments with hierarchy")
+        return enhanced_structure
+        
+    except Exception as e:
+        log.error(f"❌ Thread hierarchy analysis failed: {e}")
+        return []
+
+def identify_usernames_from_ocr(ocr_result: dict) -> list[dict]:
+    """
+    Identifiziere potentielle Benutzernamen aus OCR-Daten.
+    Bevorzuge Zeilen-basierte Erkennung (mehrere aufeinanderfolgende Tokens mit Großbuchstaben),
+    falle bei Bedarf auf Wort-basierte Heuristik zurück. Dedupliziere nach Username.
+    """
+    potential_authors: list[dict] = []
+    added_names: set[str] = set()
+
+    # 1) Line-based detection (prefer this)
+    for line in ocr_result.get('lines', []) or []:
+        line_text = (line.get('text') or '').strip()
+        if not line_text:
+            continue
+        tokens = [t for t in line_text.split() if t]
+        if not (1 <= len(tokens) <= 4):
+            continue
+        # All tokens start with uppercase and are alphabetic
+        if not all(tok[0].isupper() and any(c.isalpha() for c in tok) for tok in tokens):
+            continue
+        # Avoid common UI words
+        ui_words = {'gefällt', 'like', 'antworten', 'reply', 'vor', 'ago', 'std', 'min'}
+        if any(tok.lower() in ui_words for tok in tokens):
+            continue
+
+        words = line.get('words') or []
+        if not words:
+            continue
+        left = min(w['bbox']['left'] for w in words)
+        top = min(w['bbox']['top'] for w in words)
+        right = max(w['bbox']['left'] + w['bbox']['width'] for w in words)
+        bottom = max(w['bbox']['top'] + w['bbox']['height'] for w in words)
+        bbox = {'left': left, 'top': top, 'width': right - left, 'height': bottom - top}
+        avg_conf = line.get('avg_confidence', 0)
+        if avg_conf <= 60:
+            continue
+
+        name_key = line_text.lower()
+        if name_key in added_names:
+            continue
+        added_names.add(name_key)
+        potential_authors.append({
+            'username': line_text,
+            'bbox': bbox,
+            'confidence': avg_conf,
+            'x_position': bbox['left'],
+            'y_position': bbox['top'],
+            'center_x': bbox['left'] + bbox['width'] // 2,
+            'center_y': bbox['top'] + bbox['height'] // 2
+        })
+
+    # 2) Word-based fallback (stricter): require that the word appears in a line with 2+ capitalized tokens
+    if len(potential_authors) < 2:
+        for word in ocr_result.get('words', []) or []:
+            text = (word.get('text') or '').strip()
+            if not text:
+                continue
+            bbox = word['bbox']
+
+            # stricter username heuristic
+            is_candidate = (
+                2 < len(text) < 50 and
+                not any(char.isdigit() for char in text[:3]) and
+                text[0].isupper() and
+                word.get('confidence', 0) > 70 and
+                text.lower() not in {'gefällt', 'like', 'antworten', 'reply', 'vor', 'ago', 'std', 'min'}
+            )
+            if not is_candidate:
+                continue
+
+            # check the line context: find a line containing this word that looks like a name line
+            line_ok = False
+            for line in ocr_result.get('lines', []) or []:
+                line_text = (line.get('text') or '')
+                if text in line_text:
+                    tokens = [t for t in line_text.split() if t]
+                    cap_tokens = sum(1 for t in tokens if t[0].isupper())
+                    if cap_tokens >= 2:
+                        line_ok = True
+                        break
+            if not line_ok:
+                continue
+
+            name_key = text.lower()
+            if name_key in added_names:
+                continue
+            added_names.add(name_key)
+            potential_authors.append({
+                'username': text,
+                'bbox': bbox,
+                'confidence': word.get('confidence', 0),
+                'x_position': bbox['left'],
+                'y_position': bbox['top'],
+                'center_x': bbox['left'] + bbox['width'] // 2,
+                'center_y': bbox['top'] + bbox['height'] // 2
+            })
+
+    # Sort by Y ascending
+    potential_authors.sort(key=lambda x: x['y_position'])
+    log.info(f"👤 Identified {len(potential_authors)} potential usernames")
+    return potential_authors
+
+def analyze_indentation_levels(authors: list[dict]) -> list[dict]:
+    """
+    Analysiere Einrückungsebenen basierend auf X-Koordinaten der Benutzernamen.
+    """
+    if not authors:
+        return []
+    
+    # Bestimme Basis-X-Position (linkeste Position = Thread-Level 0)
+    base_x_positions = [author['x_position'] for author in authors]
+    min_x = min(base_x_positions)
+    
+    # Facebook's typische Einrückung: ~20-25px pro Level
+    INDENT_THRESHOLD = 20
+    
+    hierarchy_data = []
+    
+    for author in authors:
+        # Berechne relative Einrückung
+        relative_indent = author['x_position'] - min_x
+        thread_level = max(0, relative_indent // INDENT_THRESHOLD)
+        
+        # Zusätzliche Validierung für Thread-Level
+        if thread_level > 5:  # Facebook hat selten mehr als 5 Ebenen
+            thread_level = 5
+        
+        hierarchy_data.append({
+            **author,
+            'thread_level': int(thread_level),
+            'relative_indent': relative_indent,
+            'is_main_comment': thread_level == 0,
+            'is_reply': thread_level > 0
+        })
+    
+    log.info(f"📐 Analyzed indentation: {len([h for h in hierarchy_data if h['is_main_comment']])} main comments, "
+             f"{len([h for h in hierarchy_data if h['is_reply']])} replies")
+    
+    return hierarchy_data
+
+def build_thread_tree_structure(hierarchy_data: list[dict]) -> list[dict]:
+    """
+    Baue hierarchische Thread-Struktur aus Einrückungsanalyse.
+    """
+    if not hierarchy_data:
+        return []
+    
+    thread_tree = []
+    parent_stack = []  # Stack für Parent-Comments verschiedener Ebenen
+    
+    for comment_data in hierarchy_data:
+        level = comment_data['thread_level']
+        
+        # Bestimme Parent-Comment basierend auf Thread-Level
+        parent_comment_id = None
+        parent_username = None
+        
+        if level > 0:
+            # Suche nach dem nächsten Parent auf einer niedrigeren Ebene
+            for i in range(len(parent_stack) - 1, -1, -1):
+                if parent_stack[i]['thread_level'] < level:
+                    parent_comment_id = parent_stack[i]['comment_id']
+                    parent_username = parent_stack[i]['username']
+                    break
+        
+        # Generiere Comment-ID
+        comment_id = generate_comment_id({
+            'author': comment_data['username'],
+            'content': '',  # Wird später gefüllt
+            'timestamp': '',
+            'x_position': comment_data['x_position'],
+            'y_position': comment_data['y_position']
+        })
+        
+        # Erweitere Comment-Daten
+        enhanced_comment = {
+            **comment_data,
+            'comment_id': comment_id,
+            'parent_comment_id': parent_comment_id,
+            'parent_username': parent_username,
+            'has_replies': False,  # Wird später aktualisiert
+            'reply_count': 0,  # Wird später berechnet
+            'thread_position': len(thread_tree)
+        }
+        
+        # Aktualisiere Parent-Stack
+        # Entferne alle Einträge auf gleicher oder tieferer Ebene
+        parent_stack = [p for p in parent_stack if p['thread_level'] < level]
+        parent_stack.append(enhanced_comment)
+        
+        thread_tree.append(enhanced_comment)
+    
+    # Nachbearbeitung: Reply-Counts und has_replies setzen
+    for comment in thread_tree:
+        if comment['parent_comment_id']:
+            # Finde Parent und aktualisiere Reply-Info
+            for parent in thread_tree:
+                if parent['comment_id'] == comment['parent_comment_id']:
+                    parent['has_replies'] = True
+                    parent['reply_count'] = parent.get('reply_count', 0) + 1
+                    break
+    
+    log.info(f"🌳 Built thread tree with {len(thread_tree)} comments")
+    return thread_tree
+
+def map_content_to_threads(thread_structure: list[dict], ocr_result: dict) -> list[dict]:
+    """
+    Mappe Kommentar-Content zu Thread-Struktur basierend auf räumlicher Nähe.
+    """
+    enhanced_comments = []
+    
+    for comment in thread_structure:
+        username = comment['username']
+        author_y = comment['y_position']
+        author_bbox = comment['bbox']
+        
+        # Suche nach Content-Text in der Nähe des Benutzernamens
+        content_candidates = []
+        
+        for word in ocr_result.get('words', []):
+            word_text = word['text'].strip()
+            word_y = word['bbox']['top']
+            
+            # Content-Kriterien
+            is_content = (
+                len(word_text) > 3 and  # Mindestlänge
+                word_text != username and  # Nicht der Username selbst
+                abs(word_y - author_y) < 100 and  # Räumliche Nähe (100px)
+                word_y > author_y - 20 and  # Meist unter oder auf gleicher Höhe wie Username
+                not word_text.lower() in ['gefällt', 'like', 'antworten', 'reply', 'vor', 'ago'] and  # Keine UI-Elemente
+                word['confidence'] > 50  # Mindest-Konfidenz
+            )
+            
+            if is_content:
+                content_candidates.append({
+                    'text': word_text,
+                    'distance': abs(word_y - author_y),
+                    'confidence': word['confidence'],
+                    'bbox': word['bbox']
+                })
+        
+        # Sortiere nach Nähe und füge Content zusammen
+        content_candidates.sort(key=lambda x: x['distance'])
+        
+        # Nimm die ersten N nähesten Wörter als Content
+        content_words = content_candidates[:20]  # Max 20 Wörter pro Kommentar
+        content_text = ' '.join([c['text'] for c in content_words])
+        
+        # Suche nach Zeitstempeln und Reaktionen in der Nähe
+        timestamp_text = find_nearby_timestamp(comment, ocr_result)
+        reactions_text = find_nearby_reactions(comment, ocr_result)
+        
+        enhanced_comment = {
+            **comment,
+            'content': content_text,
+            'timestamp': timestamp_text,
+            'reactions': reactions_text,
+            'content_confidence': sum([c['confidence'] for c in content_words]) / len(content_words) if content_words else 0
+        }
+        
+        enhanced_comments.append(enhanced_comment)
+    
+    log.info(f"📝 Mapped content to {len(enhanced_comments)} thread comments")
+    return enhanced_comments
+
+def find_nearby_timestamp(comment: dict, ocr_result: dict) -> str:
+    """Finde Zeitstempel in der Nähe eines Kommentars."""
+    author_y = comment['y_position']
+    timestamp_patterns = ['vor', 'ago', 'std', 'min', 'h', 'm', 'd', 'tag', 'woche']
+    
+    for word in ocr_result.get('words', []):
+        word_text = word['text'].lower()
+        word_y = word['bbox']['top']
+        
+        if (any(pattern in word_text for pattern in timestamp_patterns) and 
+            abs(word_y - author_y) < 60):
+            return word['text']
+    
+    return ""
+
+def find_nearby_reactions(comment: dict, ocr_result: dict) -> str:
+    """Finde Reaktions-Text in der Nähe eines Kommentars."""
+    author_y = comment['y_position']
+    reaction_patterns = ['gefällt', 'like', 'antworten', 'reply', '👍', '❤️', '😊']
+    
+    reaction_words = []
+    for word in ocr_result.get('words', []):
+        word_text = word['text'].lower()
+        word_y = word['bbox']['top']
+        
+        if (any(pattern in word_text for pattern in reaction_patterns) and 
+            abs(word_y - author_y) < 80):
+            reaction_words.append(word['text'])
+    
+    return ' '.join(reaction_words)
+
+def merge_ocr_with_hierarchy(ocr_comments: list[dict], hierarchy_comments: list[dict]) -> list[dict]:
+    """
+    Kombiniere traditionelle OCR-Ergebnisse mit Computer Vision Thread-Hierarchie.
+    
+    Args:
+        ocr_comments: Kommentare aus parse_comments_from_ocr()
+        hierarchy_comments: Kommentare aus analyze_comment_hierarchy_visual()
+        
+    Returns:
+        Verbesserte Kommentar-Liste mit Hierarchie-Information
+    """
+    if not hierarchy_comments:
+        return ocr_comments
+    
+    if not ocr_comments:
+        return hierarchy_comments
+    
+    merged_comments = []
+    
+    try:
+        # Mappe OCR-Kommentare zu Hierarchie-Kommentaren basierend auf Ähnlichkeit
+        for hierarchy_comment in hierarchy_comments:
+            hierarchy_username = hierarchy_comment.get('username', '').lower()
+            hierarchy_content = hierarchy_comment.get('content', '').lower()
+            
+            # Suche nach dem besten Match in OCR-Kommentaren
+            best_ocr_match = None
+            best_match_score = 0
+            
+            for ocr_comment in ocr_comments:
+                ocr_author = ocr_comment.get('author', '').lower()
+                ocr_content = ocr_comment.get('content', '').lower()
+                
+                # Berechne Ähnlichkeitsscore
+                username_match = calculate_text_similarity(hierarchy_username, ocr_author)
+                content_match = calculate_text_similarity(hierarchy_content, ocr_content)
+                
+                # Gewichteter Score: Username wichtiger als Content
+                combined_score = (username_match * 0.7) + (content_match * 0.3)
+                
+                if combined_score > best_match_score and combined_score > 0.5:
+                    best_match_score = combined_score
+                    best_ocr_match = ocr_comment
+            
+            # Erstelle Enhanced Comment
+            if best_ocr_match:
+                # Kombiniere das Beste aus beiden
+                enhanced_comment = {
+                    **hierarchy_comment,  # Hierarchie-Daten (thread_level, parent_id, etc.)
+                    'content': best_ocr_match.get('content', hierarchy_comment.get('content', '')),
+                    'timestamp': best_ocr_match.get('timestamp', hierarchy_comment.get('timestamp', '')),
+                    'reactions': best_ocr_match.get('reactions', hierarchy_comment.get('reactions', '')),
+                    'author': best_ocr_match.get('author', hierarchy_comment.get('username', '')),
+                    'source': 'enhanced_hierarchy_ocr',
+                    'match_confidence': best_match_score,
+                    'enhanced_metadata': {
+                        'thread_level': hierarchy_comment.get('thread_level', 0),
+                        'parent_comment_id': hierarchy_comment.get('parent_comment_id'),
+                        'parent_username': hierarchy_comment.get('parent_username'),
+                        'is_reply': hierarchy_comment.get('is_reply', False),
+                        'has_replies': hierarchy_comment.get('has_replies', False),
+                        'reply_count': hierarchy_comment.get('reply_count', 0),
+                        'relative_indent': hierarchy_comment.get('relative_indent', 0)
+                    }
+                }
+                
+                # Entferne gematchten OCR-Kommentar um Duplikate zu vermeiden
+                ocr_comments.remove(best_ocr_match)
+            else:
+                # Kein OCR-Match gefunden, verwende Hierarchie-Daten
+                enhanced_comment = {
+                    **hierarchy_comment,
+                    'author': hierarchy_comment.get('username', ''),
+                    'source': 'hierarchy_only',
+                    'enhanced_metadata': {
+                        'thread_level': hierarchy_comment.get('thread_level', 0),
+                        'parent_comment_id': hierarchy_comment.get('parent_comment_id'),
+                        'parent_username': hierarchy_comment.get('parent_username'),
+                        'is_reply': hierarchy_comment.get('is_reply', False),
+                        'has_replies': hierarchy_comment.get('has_replies', False),
+                        'reply_count': hierarchy_comment.get('reply_count', 0),
+                        'relative_indent': hierarchy_comment.get('relative_indent', 0)
+                    }
+                }
+            
+            merged_comments.append(enhanced_comment)
+        
+        # Füge verbliebene OCR-Kommentare hinzu (ohne Hierarchie-Info)
+        for remaining_ocr in ocr_comments:
+            enhanced_comment = {
+                **remaining_ocr,
+                'source': 'ocr_only',
+                'enhanced_metadata': {
+                    'thread_level': 0,  # Unbekannt, als Haupt-Kommentar behandeln
+                    'parent_comment_id': None,
+                    'parent_username': None,
+                    'is_reply': False,
+                    'has_replies': False,
+                    'reply_count': 0,
+                    'relative_indent': 0
+                }
+            }
+            merged_comments.append(enhanced_comment)
+        
+        log.info(f"🔗 Merged {len(hierarchy_comments)} hierarchy + {len(ocr_comments)} OCR = {len(merged_comments)} enhanced comments")
+        return merged_comments
+        
+    except Exception as e:
+        log.error(f"❌ Comment merging failed: {e}")
+        # Fallback: Return OCR comments with basic metadata
+        for comment in ocr_comments:
+            comment['enhanced_metadata'] = {
+                'thread_level': 0,
+                'parent_comment_id': None,
+                'is_reply': False,
+                'has_replies': False,
+                'reply_count': 0
+            }
+        return ocr_comments
+
+def calculate_text_similarity(text1: str, text2: str) -> float:
+    """
+    Berechne Textähnlichkeit zwischen zwei Strings (vereinfachte Implementierung).
+    
+    Returns:
+        Float zwischen 0.0 (keine Ähnlichkeit) und 1.0 (identisch)
+    """
+    if not text1 or not text2:
+        return 0.0
+    
+    # Normalisiere Texte
+    text1 = ' '.join(text1.lower().split())
+    text2 = ' '.join(text2.lower().split())
+    
+    if text1 == text2:
+        return 1.0
+    
+    # Einfache Wort-Überlappung
+    words1 = set(text1.split())
+    words2 = set(text2.split())
+    
+    if not words1 or not words2:
+        return 0.0
+    
+    intersection = words1.intersection(words2)
+    union = words1.union(words2)
+    
+    # Jaccard-Ähnlichkeit
+    similarity = len(intersection) / len(union) if union else 0.0
+    
+    return similarity
 
 async def get_dom() -> str:
     """Gets the full page DOM from the browser."""

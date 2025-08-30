@@ -3,6 +3,9 @@ import os, sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir)))
 from backend.mcp_client import MCPClient
 
+import pytest
+
+@pytest.mark.skip(reason="requires live MCP server and UI; skip in CI")
 async def test_connection():
     client = MCPClient()
 
