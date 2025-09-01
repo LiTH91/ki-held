@@ -540,8 +540,9 @@ async def find_and_click_button_robust(button_texts: list[str], max_retries: int
                             else:
                                 log.info(f"✅ Found '{candidate}' at ({x}, {y}) [no clamp]")
                             
-                            # PATCH: Re-enable Pre-Click Validation - prevents false-positive clicks on profiles
-                            if not await pre_click_validate(x, y, candidate):
+                            # Extract context text around the button for pre-click validation
+                            context_text_around_button = normalized_line # Use the whole line as context
+                            if not await pre_click_validate(x, y, candidate, context_text=context_text_around_button):
                                 log.warning(f"[SKIP_LOG] Pre-click validation failed for '{candidate}' at ({x}, {y}) - preventing profile click")
                                 continue
                             
@@ -664,8 +665,9 @@ async def find_button_with_ocr_enhanced(button_texts: list[str], region: list[in
                             log.warning(f"[FILTER_LOG] OCR match '{button_text}' at ({x}, {y}) outside modal bounds - skipping")
                             continue
                         
-                        # PATCH: Re-enable Pre-Click Validation - prevents false-positive clicks
-                        if not await pre_click_validate(x, y, button_text):
+                        # Extract context text around the button for pre-click validation
+                        context_text_around_button = " ".join([w.get("text", "") for w in words[max(0, i-5):i+5]])
+                        if not await pre_click_validate(x, y, button_text, context_text=context_text_around_button):
                             log.warning(f"[SKIP_LOG] OCR pre-click validation failed for '{button_text}' at ({x}, {y}) - preventing false click")
                             continue
                         
@@ -745,8 +747,24 @@ async def find_button_with_template_matching_enhanced(button_types: list[str]) -
                     log.warning(f"[FILTER_LOG] Template match '{button_type}' at ({x}, {y}) outside modal bounds - skipping")
                     continue
                 
-                # PATCH: Re-enable Pre-Click Validation - prevents false-positive clicks on profiles
-                if not await pre_click_validate(x, y, button_type):
+                # Extract context text around the button for pre-click validation
+                # This requires a new screenshot of the area around the button
+                context_text_around_button = ""
+                try:
+                    crop_width, crop_height = 200, 100 # Larger area for context
+                    crop_x = max(0, x - crop_width // 2)
+                    crop_y = max(0, y - crop_height // 2)
+                    screenshot_result_context = await mcp_client.send_command("Screenshot-Tool", {
+                        "region": [crop_x, crop_y, crop_width, crop_height]
+                    })
+                    if screenshot_result_context and hasattr(screenshot_result_context, 'content') and screenshot_result_context.content:
+                        context_base64_data = screenshot_result_context.content[0].text.split("Base64 data: ")[1]
+                        ocr_context_result = ocr_service.extract_text_from_base64(context_base64_data)
+                        context_text_around_button = ocr_context_result.get("text", "")
+                except Exception as ctx_e:
+                    log.warning(f"[CONTEXT_OCR] Failed to get context for template match: {ctx_e}")
+
+                if not await pre_click_validate(x, y, button_type, context_text=context_text_around_button):
                     log.warning(f"[SKIP_LOG] Template pre-click validation failed for '{button_type}' at ({x}, {y}) - preventing profile click")
                     continue
                 
@@ -1288,20 +1306,22 @@ def is_within_modal_bounds(x: int, y: int, width: int | None = None, height: int
     return is_within
 
 # PATCH: Pre-Click Validation Hilfsfunktion  
-async def pre_click_validate(x: int, y: int, expected_text: str) -> bool:
+async def pre_click_validate(x: int, y: int, expected_text: str, context_text: str = "") -> bool:
     """
-    Validiert vor dem Klick, ob an der Zielkoordinate der erwartete Button-Text vorhanden ist.
-    
+    Validiert vor dem Klick, ob an der Zielkoordinate der erwartete Button-Text vorhanden ist
+    und prüft den Kontext, um Klicks auf Profile zu vermeiden.
+
     Args:
         x, y: Zielkoordinaten für den Klick
         expected_text: Erwarteter Button-Text ("Antwort", "Kommentare", etc.)
-        
+        context_text: Text aus der Umgebung des Klickziels zur Kontextprüfung
+
     Returns:
         True wenn Validierung erfolgreich, False sonst
     """
     try:
-        # PATCH: Erstelle Crop-Screenshot von ca. 80x30 Pixeln um die Zielkoordinate
-        crop_width, crop_height = 80, 30
+        # PATCH: Erweiterte Crop-Screenshot von 150x50 Pixeln für komplexe Button-Namen
+        crop_width, crop_height = 150, 50
         # PATCH: Convert numpy types to native Python int to avoid serialization errors
         crop_x = max(0, int(x) - crop_width // 2)
         crop_y = max(0, int(y) - crop_height // 2)
@@ -1337,22 +1357,46 @@ async def pre_click_validate(x: int, y: int, expected_text: str) -> bool:
                 log.debug(f"[VALIDATION] Strong template match found for '{expected_text}' at crop region (threshold 0.7)")
                 return True
         
+        # Context validation to avoid clicking on profiles
+        profile_indicators = ["add friend", "message", "following", "view profile"]
+        for indicator in profile_indicators:
+            if indicator in context_text.lower():
+                log.warning(f"[SKIP_LOG] Pre-click validation failed: context text '{context_text}' contains profile indicator '{indicator}'")
+                return False
+        
         # PATCH: OCR Substring-Check als Fallback
         ocr_result = ocr_service.extract_text_from_base64(base64_data)
         if ocr_result and ocr_result.get("text"):
             detected_text = normalize_facebook_text(ocr_result["text"])
             
-            # Überprüfe ob erwarteter Text im OCR-Text enthalten ist
+            # PATCH: Flexibles Text-Matching für Template-Namen
+            # 1. Direkte Substring-Prüfung
             if normalized_expected and normalized_expected in detected_text:
                 log.debug(f"[VALIDATION] OCR substring match for '{expected_text}' in '{detected_text}'")
                 return True
             
-            # Zusätzliche Fuzzy-Checks für häufige Varianten
+            # 2. Template-Name Fragmentierung (für "alle-xx-kommentare-ansehen" etc.)
+            if '-' in expected_text:
+                template_fragments = [part.strip() for part in expected_text.split('-') if len(part.strip()) > 2]
+                fragment_matches = 0
+                for fragment in template_fragments:
+                    if fragment.lower() in detected_text.lower():
+                        fragment_matches += 1
+                        log.debug(f"[VALIDATION] Fragment match: '{fragment}' found in '{detected_text}'")
+                
+                # Wenn mindestens 2 Fragmente gefunden werden, akzeptieren
+                if fragment_matches >= 2:
+                    log.debug(f"[VALIDATION] Template fragment validation successful: {fragment_matches}/{len(template_fragments)} fragments matched")
+                    return True
+            
+            # 3. Erweiterte Fuzzy-Checks für Button-Varianten
             fuzzy_checks = {
-                "antwort": ["antwort", "reply", "answer"],
-                "kommentar": ["kommentar", "comment", "view"],
-                "alle": ["alle", "all", "view"],
-                "ansehen": ["ansehen", "view", "see"]
+                "antwort": ["antwort", "reply", "answer", "antworten"],
+                "kommentar": ["kommentar", "comment", "view", "kommentare"],
+                "alle": ["alle", "all", "view", "mehr"],
+                "ansehen": ["ansehen", "view", "see", "zeigen"],
+                "weitere": ["weitere", "more", "additional", "show"],
+                "xx": ["xx", "mehr", "other", "replies"]
             }
             
             for key, variants in fuzzy_checks.items():
@@ -2844,7 +2888,7 @@ async def find_and_click_expansion_buttons() -> bool:
     
     try:
         # Look for all types of expansion buttons
-        expansion_templates = ["alle-xx-kommentare-ansehen", "Antwort-ansehen"]
+        expansion_templates = ["alle-xx-kommentare-ansehen", "weitere-kommentare-ansehen", "Antwort-ansehen"]
         buttons_clicked = 0
         total_matches_found = 0  # Track total template matches for fallback logic
         
@@ -3126,6 +3170,26 @@ async def find_and_click_expansion_buttons() -> bool:
                         log.debug(f"[MOVE_LOG] Move-Tool to ({x},{y}) at {last_move_at}")
                     except Exception:
                         pass
+                    # Extract context text around the button for pre-click validation
+                    context_text_around_button = ""
+                    try:
+                        crop_width, crop_height = 200, 100 # Larger area for context
+                        crop_x = max(0, x - crop_width // 2)
+                        crop_y = max(0, y - crop_height // 2)
+                        screenshot_result_context = await mcp_client.send_command("Screenshot-Tool", {
+                            "region": [crop_x, crop_y, crop_width, crop_height]
+                        })
+                        if screenshot_result_context and hasattr(screenshot_result_context, 'content') and screenshot_result_context.content:
+                            context_base64_data = screenshot_result_context.content[0].text.split("Base64 data: ")[1]
+                            ocr_context_result = ocr_service.extract_text_from_base64(context_base64_data)
+                            context_text_around_button = ocr_context_result.get("text", "")
+                    except Exception as ctx_e:
+                        log.warning(f"[CONTEXT_OCR] Failed to get context for template match in find_and_click_expansion_buttons: {ctx_e}")
+
+                    if not await pre_click_validate(x, y, template_name, context_text=context_text_around_button):
+                        log.warning(f"[SKIP_LOG] Expansion button pre-click validation failed for '{template_name}' at ({x}, {y}) - preventing profile click")
+                        continue
+
                     await asyncio.sleep(random.uniform(0.05, 0.1))  # Minimal pause before click
                     await mcp_client.send_command("Click-Tool", {"loc": [x, y]})
                     log.debug(f"[MOVE_LOG] Click-Tool at ({x},{y}) immediately after move")
@@ -3242,85 +3306,44 @@ async def find_and_click_expansion_buttons() -> bool:
         return False
 
 def parse_comments_from_ocr(ocr_text: str) -> list[dict]:
-    """Parse comment data from OCR extracted text with enhanced metadata extraction."""
+    """Parse comment data from OCR extracted text with Facebook-specific structure understanding."""
     comments = []
     
     try:
-        lines = ocr_text.split('\n')
-        current_comment = {}
+        # Normalize Unicode and whitespace; keep non-empty lines
+        def _normalize_text(value: str) -> str:
+            import unicodedata, re
+            if not isinstance(value, str):
+                return ''
+            text = unicodedata.normalize('NFC', value)
+            text = re.sub(r"\s+", " ", text).strip()
+            return text
+
+        raw_lines = ocr_text.split('\n')
+        lines = [_normalize_text(line) for line in raw_lines]
+        lines = [line for line in lines if line]
         
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            
-            # Look for author names (usually short lines before content)
-            if len(line) < 50 and not any(char.isdigit() for char in line) and line.count(' ') <= 3:
-                # Possible author name
-                if current_comment:
-                    if current_comment.get('content'):
-                        # PATCH: Enhanced metadata extraction before storing comment
-                        current_comment = enhance_comment_metadata(current_comment, ocr_text)
-                        comments.append(current_comment)
-                
-                current_comment = {
-                    'author': line,
-                    'content': '',
-                    'timestamp': '',
-                    'timestamp_parsed': None,
-                    'reactions': '',
-                    'reaction_count': 0,
-                    'comment_count': 0,
-                    'profile_link': '',
-                    'is_reply': False,
-                    'parent_comment_id': None,
-                    'context_content': '',
-                    'source': 'screenshot_ocr'
-                }
-            
-            # Look for timestamps
-            elif any(pattern in line.lower() for pattern in ['min', 'std', 'tag', 'woche', 'monat', 'jahr', 'h ', 'm ', 'd ']):
-                if current_comment:
-                    current_comment['timestamp'] = line
-                    # PATCH: Parse timestamp to structured format
-                    current_comment['timestamp_parsed'] = parse_facebook_timestamp(line)
-            
-            # Look for reaction indicators
-            elif any(reaction in line.lower() for reaction in ['gefällt', 'like', 'love', 'antworten', 'reply']):
-                if current_comment:
-                    current_comment['reactions'] = line
-                    # PATCH: Extract numeric engagement metrics
-                    reaction_count, comment_count = extract_engagement_metrics(line)
-                    current_comment['reaction_count'] = reaction_count
-                    current_comment['comment_count'] = comment_count
-            
-            # Everything else is likely comment content
-            else:
-                if current_comment:
-                    if current_comment['content']:
-                        current_comment['content'] += ' ' + line
-                    else:
-                        current_comment['content'] = line
+        log.info(f"📝 Parsing {len(lines)} OCR text lines for Facebook comment structure")
         
-        # Don't forget the last comment
-        if current_comment and current_comment.get('content'):
-            # PATCH: Enhanced metadata extraction for last comment
-            current_comment = enhance_comment_metadata(current_comment, ocr_text)
-            comments.append(current_comment)
+        # Parse Facebook comment structure with proper hierarchy understanding
+        parsed_comments = parse_facebook_comment_structure(lines)
         
-        # Filter out very short or invalid comments
+        # Enhance with metadata
+        for comment in parsed_comments:
+            enhanced_comment = enhance_comment_metadata(comment, ocr_text)
+            comments.append(enhanced_comment)
+        
+        # Filter and validate
         valid_comments = []
         for comment in comments:
-            if (comment.get('content', '').strip() and 
-                len(comment['content'].strip()) > 10 and
-                comment.get('author', '').strip()):
+            if validate_comment_structure(comment):
                 valid_comments.append(comment)
         
-        log.info(f"📝 Parsed {len(valid_comments)} valid comments from OCR text")
+        log.info(f"📊 Successfully parsed {len(valid_comments)} valid Facebook comments with proper structure")
         return valid_comments
         
     except Exception as e:
-        log.error(f"❌ Comment parsing failed: {e}")
+        log.error(f"❌ Facebook comment parsing failed: {e}")
         return []
 
 # PATCH: Enhanced metadata extraction functions
@@ -3540,6 +3563,356 @@ def extract_reply_context(comment: dict, full_ocr_text: str) -> str:
     except Exception as e:
         log.debug(f"Context extraction failed: {e}")
         return ""
+
+def parse_facebook_comment_structure(lines: list[str]) -> list[dict]:
+    """
+    Parse Facebook comment structure understanding the format:
+    - Author Name
+    - [Optional: @ReplyTarget] Comment Content
+    - Timestamp
+    - Reactions/Engagement
+    """
+    comments = []
+    i = 0
+    
+    while i < len(lines):
+        line = lines[i]
+        
+        # Skip obvious UI elements
+        if is_ui_element(line):
+            i += 1
+            continue
+        
+        # Detect if this could be an author name
+        if is_potential_author_name(line):
+            comment_data = extract_comment_block(lines, i)
+            if comment_data:
+                comments.append(comment_data['comment'])
+                i = comment_data['next_index']
+            else:
+                i += 1
+        else:
+            i += 1
+    
+    return comments
+
+def extract_comment_block(lines: list[str], start_index: int) -> dict:
+    """Extract a complete comment block starting from an author name."""
+    if start_index >= len(lines):
+        return None
+    
+    author_line = lines[start_index]
+    comment = {
+        'author': '',
+        'content': '',
+        'reply_target': None,
+        'timestamp': '',
+        'timestamp_parsed': None,
+        'reactions': '',
+        'reaction_count': 0,
+        'comment_count': 0,
+        'is_reply': False,
+        'parent_comment_id': None,
+        'source': 'facebook_ocr_structured'
+    }
+    
+    current_index = start_index
+    
+    # Extract author and handle reply structure
+    author_info = parse_facebook_author_line(author_line)
+    comment['author'] = author_info['author']
+    comment['is_reply'] = author_info['is_reply']
+    comment['reply_target'] = author_info['reply_target']
+    
+    current_index += 1
+    
+    # Extract content until a boundary is hit
+    content_lines = []
+    while current_index < len(lines):
+        line = lines[current_index]
+        
+        # Stop if we hit timestamp
+        if is_timestamp_line(line):
+            comment['timestamp'] = line
+            comment['timestamp_parsed'] = parse_facebook_timestamp(line)
+            current_index += 1
+            break
+        
+        # Stop if we hit reactions/engagement
+        elif is_engagement_line(line):
+            comment['reactions'] = line
+            reaction_count, comment_count = extract_engagement_metrics(line)
+            comment['reaction_count'] = reaction_count
+            comment['comment_count'] = comment_count
+            current_index += 1
+            break
+        
+        # Stop if we hit next author (new comment)
+        elif is_potential_author_name(line):
+            break
+        
+        # Stop if obvious UI element
+        elif is_ui_element(line):
+            current_index += 1
+            break
+        
+        # Otherwise it's likely content
+        else:
+            content_lines.append(line)
+            current_index += 1
+            # Safety: Stop if content grows too large
+            if len(' '.join(content_lines)) >= 1500:
+                break
+    
+    # Join content lines
+    comment['content'] = ' '.join(content_lines).strip()
+    
+    # For replies without separate content, use the reply_target as content marker
+    if not comment['content'] and comment['is_reply'] and comment['reply_target']:
+        # This is a reply structured as "Author Target" - create meaningful content
+        comment['content'] = f"Antwort an {comment['reply_target']}"
+    
+    # Skip engagement line if we haven't processed it yet
+    if (current_index < len(lines) and 
+        is_engagement_line(lines[current_index])):
+        line = lines[current_index]
+        comment['reactions'] = line
+        reaction_count, comment_count = extract_engagement_metrics(line)
+        comment['reaction_count'] = reaction_count
+        comment['comment_count'] = comment_count
+        current_index += 1
+    
+    # Return even if content is minimal for replies
+    if comment['content'] or (comment['is_reply'] and comment['reply_target']):
+        return {
+            'comment': comment,
+            'next_index': current_index
+        }
+    
+    return None
+
+def parse_facebook_author_line(line: str) -> dict:
+    """
+    Parse Facebook author line which may contain reply structure:
+    Examples:
+    - "Max Mustermann" (simple comment)
+    - "Max Mustermann Anna Schmidt" (reply, where Anna Schmidt is target)
+    - "Max Antwort Anna Schmidt" (reply with German "Antwort")
+    """
+    import re
+    
+    # Clean the line
+    line = line.strip()
+    
+    # Check for German reply pattern: "Author Antwort Target" or lines starting with "Antwort"
+    antwort_match = re.match(r'^(.+?)\s+(?:Antwort|antwort)\s+(.+)$', line)
+    if antwort_match:
+        return {
+            'author': antwort_match.group(1).strip(),
+            'is_reply': True,
+            'reply_target': antwort_match.group(2).strip()
+        }
+    
+    # Lines starting with "Antwort ..." are not authors
+    if re.match(r'^(?:Antwort|antwort)\b', line):
+        return {
+            'author': '',
+            'is_reply': False,
+            'reply_target': None
+        }
+    
+    # Check for multiple names (be more conservative about replies)
+    words = line.split()
+    if len(words) == 2:
+        # Two words could be either:
+        # - First Last (normal name)
+        # - Author Target (reply)
+        # Only treat as reply if it seems likely (context would help, but we don't have it)
+        # For now, be conservative and treat as normal name
+        return {
+            'author': line,
+            'is_reply': False,
+            'reply_target': None
+        }
+    elif len(words) == 3:
+        # Three words - could be "First Last Target" or "First Middle Last"
+        # Be conservative: treat as normal name unless clearly looks like reply
+        return {
+            'author': line,
+            'is_reply': False,
+            'reply_target': None
+        }
+    elif len(words) >= 4:
+        # More than 3 words - more likely to be reply structure
+        mid_point = len(words) // 2
+        return {
+            'author': ' '.join(words[:mid_point]),
+            'is_reply': True,
+            'reply_target': ' '.join(words[mid_point:])
+        }
+    
+    # Simple case: just author name
+    return {
+        'author': line,
+        'is_reply': False,
+        'reply_target': None
+    }
+
+def is_potential_author_name(line: str) -> bool:
+    """Check if a line could be an author name."""
+    if not line or len(line) > 80:  # Too long for a name
+        return False
+    
+    # Skip obvious UI elements first (before other checks to avoid circular dependency)
+    ui_elements = [
+        'alle kommentare', 'all comments', 'mehr anzeigen', 'show more',
+        'relevanteste', 'most relevant', 'neueste', 'newest',
+        'weitere kommentare', 'more comments', 'antworten', 'replies',
+        'teilen', 'share', 'melden', 'report', 'verbergen', 'hide'
+    ]
+    if any(element in line.lower() for element in ui_elements):
+        return False
+    
+    # Skip timestamp patterns - use same logic as is_timestamp_line (expanded)
+    timestamp_patterns = [
+        r'\bvor\s+\d+\s+min\.?',
+        r'\bvor\s+\d+\s+std\.?',
+        r'\bvor\s+\d+\s+stunde[n]?\b',
+        r'\bvor\s+\d+\s+minute[n]?\b',
+        r'\bvor\s+\d+\s+tag(e|en)?\b',
+        r'\bvor\s+\d+\s+woche(n)?\b',
+        r'\bvor\s+\d+\s+monat(e|en)?\b',
+        r'\bvor\s+\d+\s+jahr(e|en)?\b',
+        r'\b\d+\s*h\b',
+        r'\b\d+\s*m\b',
+        r'\b\d+\s*d\b',
+        r'\b\d+\s*w\b',
+        r'\b\d+\s+hours?\s+ago\b',
+        r'\b\d+\s+minutes?\s+ago\b',
+        r'\b\d+\s+days?\s+ago\b',
+        r'\b\d{1,2}\.\d{1,2}\.\d{2,4}\b',
+    ]
+    import re
+    if any(re.search(pattern, line.lower()) for pattern in timestamp_patterns):
+        return False
+    
+    # Skip engagement patterns - only if they actually look like engagement
+    engagement_patterns = [
+        r'\bgefällt\s+mir\b',          # Gefällt mir
+        r'\d+\s+gefällt\s+mir\b',      # 42 Gefällt mir
+        r'\blike\b',
+        r'\d+\s+like',
+        r'\bantworten\b',               # Antworten button
+        r'\breply\b',
+        r'\bkommentar\b',
+        r'\bcomment\b',
+        r'·',                          # Facebook separator
+        r'👍|❤️|😊|😢|😡|🔥'           # Reaction emojis
+    ]
+    import re
+    if any(re.search(pattern, line.lower()) for pattern in engagement_patterns):
+        return False
+    
+    # Names typically have 1-4 words
+    words = line.split()
+    if len(words) > 6:  # Too many words for author line
+        return False
+    
+    # Check if it's likely a name (no excessive punctuation, URLs, etc.)
+    if any(char in line for char in ['http', 'www', '@', '#', '...']):
+        return False
+    
+    # If it contains numbers, it's probably not a name
+    if any(char.isdigit() for char in line):
+        return False
+    
+    # Leading reply marker should not be considered an author line
+    if line.lower().startswith('antwort '):
+        return False
+    
+    return True
+
+def is_timestamp_line(line: str) -> bool:
+    """Check if line contains timestamp information."""
+    import re
+    
+    # Expanded timestamp patterns
+    timestamp_patterns = [
+        r'\bvor\s+\d+\s+min\.?',
+        r'\bvor\s+\d+\s+std\.?',
+        r'\bvor\s+\d+\s+stunde[n]?\b',
+        r'\bvor\s+\d+\s+minute[n]?\b',
+        r'\bvor\s+\d+\s+tag(e|en)?\b',
+        r'\bvor\s+\d+\s+woche(n)?\b',
+        r'\bvor\s+\d+\s+monat(e|en)?\b',
+        r'\bvor\s+\d+\s+jahr(e|en)?\b',
+        r'\b\d+\s*h\b',
+        r'\b\d+\s*m\b',
+        r'\b\d+\s*d\b',
+        r'\b\d+\s*w\b',
+        r'\b\d+\s+hours?\s+ago\b',
+        r'\b\d+\s+minutes?\s+ago\b',
+        r'\b\d+\s+days?\s+ago\b',
+        r'\b\d{1,2}\.\d{1,2}\.\d{2,4}\b',
+    ]
+    
+    line_lower = line.lower()
+    return any(re.search(pattern, line_lower) for pattern in timestamp_patterns)
+
+def is_engagement_line(line: str) -> bool:
+    """Check if line contains engagement/reaction information."""
+    import re
+    
+    # More specific engagement patterns
+    engagement_patterns = [
+        r'\bgefällt\s+mir\b',          # Gefällt mir
+        r'\d+\s+gefällt\s+mir\b',      # 42 Gefällt mir
+        r'\blike\b',
+        r'\d+\s+like',
+        r'\bantworten\b',               # Antworten button
+        r'\breply\b',
+        r'\d+\s+kommentar',            # 17 Kommentare
+        r'\bcomment\b',
+        r'·',                          # Facebook separator
+        r'👍|❤️|😊|😢|😡|🔥'           # Reaction emojis
+    ]
+    
+    line_lower = line.lower()
+    return any(re.search(pattern, line_lower) for pattern in engagement_patterns)
+
+def is_ui_element(line: str) -> bool:
+    """Check if line is a UI element that should be ignored."""
+    ui_elements = [
+        'alle kommentare', 'all comments', 'mehr anzeigen', 'show more',
+        'relevanteste', 'most relevant', 'neueste', 'newest',
+        'weitere kommentare', 'more comments', 'antworten', 'replies',
+        'teilen', 'share', 'melden', 'report', 'verbergen', 'hide'
+    ]
+    return any(element in line.lower() for element in ui_elements)
+
+def validate_comment_structure(comment: dict) -> bool:
+    """Validate that a comment has the required structure and content."""
+    required_fields = ['author', 'content']
+    
+    # Check required fields exist and are not empty
+    for field in required_fields:
+        if not comment.get(field, '').strip():
+            return False
+    
+    # Very short comments are still evidence-relevant; require at least 1 character
+    if len(comment['content'].strip()) < 1:
+        return False
+    
+    # Author name should be reasonable
+    author = comment['author'].strip()
+    if len(author) < 2 or len(author) > 50:
+        return False
+    
+    # Skip comments that are just UI elements
+    if is_ui_element(comment['content']):
+        return False
+    
+    return True
 
 def generate_comment_id(comment: dict) -> str:
     """
