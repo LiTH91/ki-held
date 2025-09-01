@@ -31,7 +31,8 @@ ki-held/
 - backend/app.py: creates FastAPI app, sets CORS, mounts routers under `/api`.
 - backend/main.py: uvicorn entry to run the app.
 - backend/mcp_client.py: constructs `Client(StdioTransport(...))` to start `Windows-MCP/main.py` using the Windows-MCP venv python; exposes `send_command` with retries.
-- backend/mcp_service.py: high-level helpers that call MCP tools (navigate/get_dom/scroll/click); includes new progressive screenshot extraction functions for Facebook comment scraping.
+- backend/mcp_service.py: high-level helpers that call MCP tools (navigate/get_dom/scroll/click); includes progressive screenshot-based extraction for Facebook comment scraping and structured OCR parsing.
+- backend/api_models.py: shared Pydantic schemas for API requests/responses (types for scans, comments, evidence metadata).
 - backend/ocr_service.py: OCR service using pytesseract for text extraction from screenshots; provides `extract_text_from_base64()` method.
 - backend/template_service.py: Template matching service using OpenCV; provides `match_template_in_base64()` for UI element detection.
 - backend/routers/scan.py: scan endpoint implementation; handles hate speech analysis and evidence collection.
@@ -69,7 +70,45 @@ npm run tauri dev
 - Root cause: `fastmcp.utilities.cli` availability differs between versions; banner output on STDIO broke the handshake and caused "Connection closed".
 - Resolution: define a no-op `log_server_banner` when the module is missing; add early `startup_debug.log` breadcrumbs; ensure `mcp_client.py` launches with the Windows-MCP venv python and correct cwd.
 
-## Recent changes (2025-08-29)
+## Recent changes (2025-09-01)
+
+### Facebook OCR Parsing & Reply Hierarchy
+- New structured OCR parsing pipeline to reliably extract:
+  - **author/username**
+  - **content** (multi-line, stops on timestamp/engagement/next author)
+  - **reply hierarchy**: `is_reply`, `reply_target`
+  - **timestamp** (relative forms like "vor 2 Std", shorthand like `2h`, and English variants)
+  - **engagement** ("Gefällt mir", "Antworten", counts like `17 Kommentare`)
+- Key functions (backend/mcp_service.py):
+  - `parse_comments_from_ocr(ocr_text: str) -> list[dict]`
+  - `parse_facebook_comment_structure(lines: list[str]) -> list[dict]`
+  - `extract_comment_block(lines: list[str], start_index: int) -> dict`
+  - `parse_facebook_author_line(line: str) -> dict`
+  - `is_timestamp_line(line: str) -> bool`
+  - `is_engagement_line(line: str) -> bool`
+  - `is_ui_element(line: str) -> bool`
+  - `validate_comment_structure(comment: dict) -> bool`
+- Output schema (parsed comment dict):
+  - `author` (string)
+  - `content` (string)
+  - `is_reply` (bool)
+  - `reply_target` (string | None)
+  - `timestamp` (string)
+  - `reactions` (string)
+  - `reaction_count`, `comment_count` (ints)
+  - `source` (e.g., `facebook_ocr_structured`)
+
+### Backend ↔ Frontend Interop updates
+- Router `backend/routers/scan.py` augments each comment payload with reply info:
+  - `is_reply`, `parent_comment_id`, `reply_target`, `context_content`
+- Frontend `frontend/src/components/CommentReview.tsx` renders a reply indicator when `is_reply` and `reply_target` are present.
+
+### Notes on heuristics and reliability
+- Author detection ignores UI elements (e.g., "Alle Kommentare", "Antworten") and precise timestamp patterns.
+- Engagement detection requires specific markers (e.g., `Gefällt mir`, `Antworten`, numeric `… Kommentare`).
+- Conservative mapping for ambiguous 2–3 word lines to reduce false reply detection.
+
+## Changes (2025-08-29)
 
 ### Dynamic Scroll-Based Content Loading
 - **Screenshot-Based End Detection**: Pre-scroll phase uses screenshot hashing to detect when page bottom is reached (5 consecutive unchanged screens)
